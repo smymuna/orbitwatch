@@ -18,7 +18,9 @@ vars:
 models:
   orbitwatch:
     staging:
-      +materialized: view
+      # Tables, not views: a view would read bronze Parquet through an absolute file path,
+      # so a warehouse copied elsewhere (e.g. the published release) could not use it.
+      +materialized: table
     intermediate:
       +materialized: view
     marts:

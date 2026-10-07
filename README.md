@@ -13,15 +13,15 @@ that answers questions like: *which satellites manoeuvred this week, what came b
 who owns what is up there, and which objects will pass dangerously close in the next 24
 hours?*
 
-**First live run (7 October 2026):**
+**First full run on GitHub Actions (7 October 2026):**
 
 | | |
 |---|---|
 | Objects ever catalogued / still in orbit | **70,882 / 35,214** (20,195 satellites, 12,534 debris, 2,430 rocket bodies) |
 | Biggest owners in orbit | US 18,532 (mostly Starlink), CIS 6,667, PRC 6,169 |
 | Launches | 2025 was a record with **315 launches**; 3,169 of 4,492 payloads were Starlink |
-| Re-entries | 25 objects came back down in the past week |
-| Close approaches | 802 pairs among debris-cloud fragments within 5 km in the next 24 h; closest **150 m** (Fengyun-1C fragment × Iridium 33 fragment) |
+| Re-entries | 25 objects came back down in the past week; 22 more have a perigee under 250 km (mostly old Starlinks being deorbited) |
+| Close approaches | **19,301 objects** screened: 43,492 pairs predicted within 5 km in the next 24 h, closest **19 m** (Yaogan-35 01A × Starlink-34312, at 11.8 km/s). Verified by independent 1-second propagation. |
 
 ## Why this is a data engineering problem
 
@@ -119,7 +119,7 @@ them into `data/`.
 
 ## Engineering
 
-- **Tests:** 31 tests, 95% coverage. Parsers run on real captured CelesTrak payloads,
+- **Tests:** 34 tests, 95% coverage. Parsers run on real captured CelesTrak payloads,
   including its "not updated" and "invalid group" replies. Screening is checked against a
   brute-force propagation (agreement within 50 m) and real debris data. An **offline
   end-to-end test** runs Dagster + dbt + DuckDB over two simulated days and asserts that
@@ -136,7 +136,10 @@ them into `data/`.
   element sets from different days, so it fills in as the archive grows.
 - **Close approaches are screening candidates,** not collision probabilities: SGP4 with GP
   elements is accurate to about 1 km at epoch and degrades by a few km per day, with no
-  covariance information.
+  covariance information. A predicted 19 m pass means "within the uncertainty", not "they
+  will touch". The volume is plausible: SpaceX reports ~275 collision-avoidance manoeuvres a
+  day at much tighter thresholds, and the distribution of miss distances matches what random
+  crossings within 5 km predict.
 - **Manoeuvre detection is a heuristic:** drag only lowers orbits, so a raise above
   0.5 km between element sets is treated as a burn. Thresholds are dbt variables.
 - **Coverage:** active satellites plus four major debris clouds, not every tracked

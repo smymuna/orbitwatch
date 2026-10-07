@@ -164,3 +164,11 @@ def test_marts_answer_simple_questions(warehouse: tuple[Path, int]) -> None:
         r for (r,) in _q(path, "select distinct orbit_regime from dim_object where is_in_orbit")
     }
     assert "LEO" in regimes
+
+
+def test_warehouse_is_portable(warehouse: tuple[Path, int]) -> None:
+    # The published warehouse must not depend on files on the machine that built it
+    # (found when a released warehouse failed to query staging models).
+    path, _ = warehouse
+    leaky = _q(path, "select view_name from duckdb_views() where sql ilike '%read_parquet%'")
+    assert leaky == []
