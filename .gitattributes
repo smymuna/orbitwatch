@@ -1,0 +1,2 @@
+# Test fixtures are real API responses; keep their bytes (CelesTrak uses CRLF line endings).
+tests/fixtures/** -text
