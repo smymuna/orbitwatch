@@ -8,7 +8,7 @@ from orbitwatch.config import Settings
 class OrbitwatchConfig(dg.ConfigurableResource):  # type: ignore[type-arg]
     """Where data lives and what to download. Defaults come from ORBITWATCH_* variables."""
 
-    data_dir: str = str(Settings().data_dir)
+    data_dir: str = str(Settings().data_dir.resolve())
     gp_groups: list[str] = Settings().gp_groups
     http_timeout_s: float = Settings().http_timeout_s
     contact: str = Settings().contact

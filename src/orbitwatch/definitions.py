@@ -1,5 +1,6 @@
 """Dagster definitions: assets, checks, the refresh job and its schedule."""
 
+import os
 import shutil
 import sys
 from collections.abc import Mapping
@@ -16,9 +17,31 @@ from orbitwatch.assets.ingest import (
     satcat_is_complete,
     satcat_snapshot,
 )
+from orbitwatch.config import Settings
 from orbitwatch.resources import OrbitwatchConfig
 
-DBT_DIR = Path(__file__).resolve().parents[2] / "dbt"
+
+def find_dbt_dir() -> Path:
+    """The dbt project: $ORBITWATCH_DBT_DIR, else next to the source tree, else ./dbt.
+
+    "Two levels up from this file" only holds for an editable install; a normal install
+    (as in the Docker image) puts this file in site-packages.
+    """
+    candidates = [
+        os.environ.get("ORBITWATCH_DBT_DIR"),
+        Path(__file__).resolve().parents[2] / "dbt",
+        Path.cwd() / "dbt",
+    ]
+    for c in candidates:
+        if c and (Path(c) / "dbt_project.yml").exists():
+            return Path(c).resolve()
+    raise FileNotFoundError("dbt project not found; set ORBITWATCH_DBT_DIR")
+
+
+DBT_DIR = find_dbt_dir()
+# dbt runs with the dbt project as its working directory, so a relative data directory
+# would resolve to dbt/data. Pin it to an absolute path for both Python and dbt.
+os.environ["ORBITWATCH_DATA_DIR"] = str(Settings().data_dir.resolve())
 # The dbt installed next to this Python, so an un-activated virtualenv works too.
 _venv_dbt = Path(sys.executable).with_name("dbt")
 DBT_EXECUTABLE = str(_venv_dbt) if _venv_dbt.exists() else (shutil.which("dbt") or "dbt")

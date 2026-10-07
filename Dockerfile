@@ -4,7 +4,8 @@ FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     ORBITWATCH_DATA_DIR=/data \
-    DAGSTER_HOME=/dagster_home
+    DAGSTER_HOME=/dagster_home \
+    ORBITWATCH_DBT_DIR=/app/dbt
 RUN useradd --create-home --uid 10001 app && mkdir -p /data /dagster_home && chown -R app /data /dagster_home
 WORKDIR /app
 COPY pyproject.toml README.md ./
