@@ -1,0 +1,14 @@
+# docker compose up --build  ->  Dagster UI on http://localhost:3000
+# Materialize everything from the UI ("Materialize all"), or wait for the 6-hourly schedule
+# (turn it on under Automation).
+services:
+  orbitwatch:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/data
+      - dagster_home:/dagster_home
+
+volumes:
+  dagster_home:

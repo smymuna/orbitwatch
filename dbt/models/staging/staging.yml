@@ -1,0 +1,40 @@
+version: 2
+
+models:
+  - name: stg_gp_elements
+    description: One row per distinct element set (object + epoch), with derived orbit size.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [norad_cat_id, epoch]
+    columns:
+      - name: norad_cat_id
+        data_tests: [not_null]
+      - name: epoch
+        data_tests: [not_null]
+      - name: eccentricity
+        data_tests:
+          - between:
+              arguments: {min_value: 0, max_value: 0.9999}
+      - name: inclination
+        data_tests:
+          - between:
+              arguments: {min_value: 0, max_value: 180}
+      - name: mean_motion
+        description: Revolutions per day. Above ~17 the object would be inside the atmosphere.
+        data_tests:
+          - between:
+              arguments: {min_value: 0.05, max_value: 17.5}
+
+  - name: stg_satcat_daily
+    description: The catalogue as of each snapshot day.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [norad_cat_id, snapshot_date]
+    columns:
+      - name: object_type
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['PAY', 'R/B', 'DEB', 'UNK']

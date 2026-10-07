@@ -1,0 +1,54 @@
+version: 2
+
+models:
+  - name: dim_object
+    description: Every object ever catalogued, current attributes and latest orbit.
+    columns:
+      - name: norad_cat_id
+        data_tests: [unique, not_null]
+      - name: orbit_regime
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['LEO', 'MEO', 'GEO', 'HEO', 'OTHER']
+
+  - name: dim_object_history
+    description: SCD type 2 history of catalogue attributes (status, owner, decay date, ...).
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [norad_cat_id, version]
+      - unique_combination:
+          arguments:
+            columns: [norad_cat_id, valid_from]
+    columns:
+      - name: valid_from
+        data_tests: [not_null]
+
+  - name: fct_element_sets
+    columns:
+      - name: perigee_km
+        description: Can be slightly negative just before re-entry; anything far below is an error.
+        data_tests:
+          - between:
+              arguments: {min_value: -200, max_value: 500000}
+
+  - name: fct_orbit_changes
+    columns:
+      - name: change_type
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['raise', 'lower', 'plane_change']
+
+  - name: mart_close_approaches
+    columns:
+      - name: miss_km
+        data_tests:
+          - between:
+              arguments: {min_value: 0, max_value: 50}
+      - name: relative_speed_kms
+        data_tests:
+          - between:
+              arguments: {min_value: 0, max_value: 16}

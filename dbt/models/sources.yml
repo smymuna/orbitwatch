@@ -1,0 +1,27 @@
+version: 2
+
+sources:
+  - name: bronze
+    description: Typed Parquet snapshots written by the ingestion assets (one file per download).
+    meta:
+      external_location: "read_parquet('{{ env_var('ORBITWATCH_DATA_DIR', '../data') }}/bronze/{name}/*/*.parquet', hive_partitioning = true, union_by_name = true)"
+    tables:
+      - name: gp
+        description: Orbital elements (OMM fields) per object per snapshot, from CelesTrak GP groups.
+        meta:
+          dagster:
+            asset_key: ["bronze", "gp_snapshot"]
+      - name: satcat
+        description: The full CelesTrak satellite catalogue, one copy per snapshot.
+        meta:
+          dagster:
+            asset_key: ["bronze", "satcat_snapshot"]
+
+  - name: compute
+    description: Tables written by Python assets (computations that are not SQL).
+    schema: compute
+    tables:
+      - name: close_approaches
+        meta:
+          dagster:
+            asset_key: ["compute", "close_approaches"]

@@ -1,0 +1,75 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "orbitwatch"
+version = "0.1.0"
+description = "Space traffic data pipeline: daily snapshots of every tracked object in orbit, modelled into a warehouse with manoeuvre, re-entry and close-approach detection"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+authors = [{ name = "Mymuna Sultana" }]
+dependencies = [
+    "dagster>=1.13,<1.14",
+    "dagster-dbt>=0.29,<0.30",
+    "dbt-core>=1.11,<1.13",
+    "dbt-duckdb>=1.11,<1.12",
+    "duckdb>=1.5,<1.6",
+    "httpx>=0.28",
+    "numpy>=2.2",
+    "pyarrow>=19",
+    "pydantic-settings>=2.4",
+    "scipy>=1.14",
+    "sgp4>=2.24",
+]
+
+[project.optional-dependencies]
+dev = [
+    "dagster-webserver>=1.13,<1.14",
+    "mypy>=1.11",
+    "pytest>=8.3",
+    "pytest-cov>=5.0",
+    "respx>=0.21",
+    "ruff>=0.6",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/orbitwatch"]
+
+[tool.dagster]
+module_name = "orbitwatch.definitions"
+code_location_name = "orbitwatch"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+filterwarnings = [
+    # raised inside dagster-dbt itself, not by this project
+    "ignore:AssetExecutionContext.op is deprecated:DeprecationWarning:dagster_dbt",
+]
+
+[tool.coverage.run]
+source = ["orbitwatch"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["dbt"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "PT", "NPY"]
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["sgp4.*", "scipy.*", "pyarrow.*", "dagster_dbt.*"]
+ignore_missing_imports = true
