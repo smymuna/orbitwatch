@@ -726,7 +726,8 @@ new ResizeObserver(() => launches()).observe($('#ln-chart'));
 
 /* ------------------------------------------------------------------ boot */
 size(); frame.stopped = true; start();
-Promise.all(['data/orbits.json', 'data/stats.json', 'data/land.json'].map(u => fetch(u).then(r => { if (!r.ok) throw new Error(u); return r.json(); }))).then(([o, s, l]) => {
+// revalidate the data files (they change every 6 hours); a 304 costs almost nothing
+Promise.all(['data/orbits.json', 'data/stats.json', 'data/land.json'].map(u => fetch(u, { cache: u.includes('land') ? 'default' : 'no-cache' }).then(r => { if (!r.ok) throw new Error(u); return r.json(); }))).then(([o, s, l]) => {
   S = s; objs = o.objects; n = objs.length;
   types = Uint8Array.from(objs, x => x[10]); names = objs.map(x => x[1]); searchIdx = names.map(x => x.toUpperCase());
   objs.forEach((x, i) => byNorad.set(x[0], i));
@@ -765,7 +766,10 @@ themeBtn.addEventListener('click', () => {
   const light = document.documentElement.dataset.theme !== 'light';
   const apply = () => { if (light) document.documentElement.dataset.theme = 'light'; else delete document.documentElement.dataset.theme; syncTheme(); };
   try { localStorage.setItem('ow-theme', light ? 'light' : 'dark'); } catch (e) {}
-  if (document.startViewTransition && !reduce) document.startViewTransition(apply); else apply();
+  if (document.startViewTransition && !reduce) {
+    // an interrupted transition (tab hidden, page left) rejects these; the theme still applies
+    const t = document.startViewTransition(apply); t.ready.catch(() => {}); t.finished.catch(() => {});
+  } else apply();
 });
 syncTheme();
 })();
