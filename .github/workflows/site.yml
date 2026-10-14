@@ -35,8 +35,10 @@ jobs:
       - run: pip install -e .
       - name: Download the newest warehouse
         run: |
-          tag=$(gh release list --limit 20 --json tagName,createdAt \
-            --jq '[.[] | select(.tagName | startswith("data-"))] | sort_by(.createdAt) | last | .tagName')
+          # tags are data-YYYY-MM-DD, so the name sorts by date (createdAt is the tagged
+          # commit's date, the same for every release)
+          tag=$(gh release list --limit 30 --json tagName \
+            --jq '[.[].tagName | select(startswith("data-"))] | sort | last')
           echo "Using $tag"
           gh release download "$tag" --pattern 'warehouse-*.duckdb' --dir /tmp/release
       - name: Export the site data
