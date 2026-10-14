@@ -22,6 +22,8 @@ models:
       # so a warehouse copied elsewhere (e.g. the published release) could not use it.
       +materialized: table
     intermediate:
-      +materialized: view
+      # Ephemeral (inlined into the models that use it): a view here would name the
+      # warehouse's catalog, so the published file failed when opened under another name.
+      +materialized: ephemeral
     marts:
       +materialized: table

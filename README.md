@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/smymuna/orbitwatch/actions/workflows/ci.yml/badge.svg)](https://github.com/smymuna/orbitwatch/actions/workflows/ci.yml)
 [![Collect](https://github.com/smymuna/orbitwatch/actions/workflows/collect.yml/badge.svg)](https://github.com/smymuna/orbitwatch/actions/workflows/collect.yml)
+[![Site](https://github.com/smymuna/orbitwatch/actions/workflows/site.yml/badge.svg)](https://smymuna.github.io/orbitwatch/)
 ![Python](https://img.shields.io/badge/python-3.12-blue)
 ![Dagster](https://img.shields.io/badge/orchestration-Dagster-4f43dd)
 ![dbt](https://img.shields.io/badge/transform-dbt-ff694b)
@@ -12,6 +13,10 @@ satellite and major debris cloud, keeps the full history, and models it into a w
 that answers questions like: *which satellites manoeuvred this week, what came back down,
 who owns what is up there, and which objects will pass dangerously close in the next 24
 hours?*
+
+**Live: [smymuna.github.io/orbitwatch](https://smymuna.github.io/orbitwatch/)**: the newest
+snapshot on a globe you can search and click, with the warehouse's close approaches,
+re-entries, manoeuvres, launches and owners. Rebuilt after every collection.
 
 **First full run on GitHub Actions (7 October 2026):**
 
@@ -51,7 +56,8 @@ flowchart LR
     C --> M2[mart_close_approaches]
     M --> W[(DuckDB warehouse)]
     M2 --> W
-    B -.->|daily| GR[(GitHub Releases<br/>history archive)]
+    B -.->|each run| GR[(GitHub Releases<br/>history archive)]
+    W -.->|orbitwatch-export| WEB[Website<br/>GitHub Pages]
 ```
 
 Orchestrated by **Dagster** as software-defined assets. The dbt models are Dagster assets
@@ -106,6 +112,25 @@ To start from the published archive instead of an empty history, download `bronz
 files from the [data releases](https://github.com/smymuna/orbitwatch/releases) and extract
 them into `data/`.
 
+## The website
+
+[`site/index.html`](site/index.html) is a single static page. After each collection the
+**Site** workflow downloads the newest warehouse from the releases, runs
+`orbitwatch-export` ([export.py](src/orbitwatch/export.py)) to write two small JSON files,
+and deploys to GitHub Pages:
+
+- `orbits.json`: the latest element set of every object (about 2 MB). The browser
+  propagates all ~19,000 orbits with SGP4 in a Web Worker, so positions are live, not
+  pre-rendered.
+- `stats.json`: the marts the page shows (close approaches, re-entries, manoeuvres,
+  launches, owners).
+
+Try it locally after a pipeline run:
+
+```bash
+orbitwatch-export --out site/data && python -m http.server -d site 8000
+```
+
 ## Data quality
 
 - **Ingestion:** the client checks every payload really is JSON or the expected CSV
@@ -119,16 +144,19 @@ them into `data/`.
 
 ## Engineering
 
-- **Tests:** 34 tests, 95% coverage. Parsers run on real captured CelesTrak payloads,
+- **Tests:** 36 tests, 93% coverage. Parsers run on real captured CelesTrak payloads,
   including its "not updated" and "invalid group" replies. Screening is checked against a
   brute-force propagation (agreement within 50 m) and real debris data. An **offline
   end-to-end test** runs Dagster + dbt + DuckDB over two simulated days and asserts that
   an injected ISS reboost is detected as a +2 km orbit raise, and that a re-entry creates a
-  new history version.
+  new history version. A published warehouse is reopened under its release file name to
+  prove every table and view still answers, and the website export is checked against it.
 - **Static checks:** `ruff`, `mypy --strict`, `dagster definitions validate`.
 - **CI:** lint, types, tests, Docker build with a UI smoke test.
-- **Collect workflow:** daily GitHub Actions run that restores 90 days of history from
-  releases, runs the pipeline, and publishes the day's snapshot and warehouse.
+- **Collect workflow:** a GitHub Actions run every 6 hours restores 90 days of history from
+  releases, runs the pipeline (retrying twice, 10 minutes apart, if CelesTrak is
+  unreachable), and publishes the day's snapshots and warehouse.
+- **Site workflow:** rebuilds and deploys the website after every successful collection.
 
 ## Limitations
 

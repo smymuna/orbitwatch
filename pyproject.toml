@@ -24,6 +24,9 @@ dependencies = [
     "sgp4>=2.24",
 ]
 
+[project.scripts]
+orbitwatch-export = "orbitwatch.export:main"
+
 [project.optional-dependencies]
 dev = [
     "dagster-webserver>=1.13,<1.14",

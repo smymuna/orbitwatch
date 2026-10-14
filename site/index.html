@@ -1,0 +1,774 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OrbitWatch · space traffic</title>
+<meta name="description" content="Every tracked object in orbit, refreshed every 6 hours: close approaches, re-entries, manoeuvres and launches from the OrbitWatch data pipeline.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='7' fill='%237088ff'/%3E%3Cellipse cx='16' cy='16' rx='14' ry='5' fill='none' stroke='%237088ff' stroke-width='2' transform='rotate(-25 16 16)'/%3E%3C/svg%3E">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#0c0e11">
+<script>try{if(localStorage.getItem('ow-theme')==='light')document.documentElement.dataset.theme='light'}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Funnel+Display:wght@500;600&family=Funnel+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0c0e11; --bg-rgb:12,14,17; --surface:#15181d; --soft:#1b1f25; --hover:#242932; --rule:#262b33; --rule-2:#363c46;
+  --ink:#eceef1; --ink-2:#a9afb8; --ink-3:#7a818c; --on-ink:#0c0e11;
+  --hi:#7088ff; --hi-rgb:112,136,255; --hi-2:#aebaff; --hi-btn:#4f6bff; --hi-btn-hover:#6079ff; --hi-soft:rgba(112,136,255,.16);
+  --sat:#d6dae0; --debris:#ff7a52; --sat-rb:#7f8792; --earth:#13171c; --earth-edge:#242a32; --land:#3f4752; --grid:#1f242b;
+  --ok:#3cc98e; --warn:#f2b441; --crit:#ff6363; --shadow:rgba(0,0,0,.5);
+  --display:"Funnel Display",system-ui,sans-serif; --sans:"Funnel Sans",system-ui,sans-serif; --mono:"JetBrains Mono",ui-monospace,monospace;
+  --ease-out:cubic-bezier(.23,1,.32,1);
+  color-scheme:dark;
+}
+:root[data-theme="light"]{
+  --bg:#ffffff; --bg-rgb:255,255,255; --surface:#ffffff; --soft:#f3f4f6; --hover:#e8eaed; --rule:#e5e7ea; --rule-2:#d5d8dc;
+  --ink:#111316; --ink-2:#51575f; --ink-3:#7c828b; --on-ink:#ffffff;
+  --hi:#2747ff; --hi-rgb:39,71,255; --hi-2:#7a8cff; --hi-btn:#2747ff; --hi-btn-hover:#1c39e0; --hi-soft:#e9ecff;
+  --sat:#15181d; --debris:#e4572e; --sat-rb:#7a818b; --earth:#f1f3f5; --earth-edge:#dde1e6; --land:#8e97a3; --grid:#eceef0;
+  --ok:#12895a; --warn:#b26d00; --crit:#d63c3c; --shadow:rgba(17,19,22,.08);
+  color-scheme:light;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{overflow-x:clip}
+body{background:var(--bg);color:var(--ink);font:400 1rem/1.55 var(--sans);-webkit-font-smoothing:antialiased;overflow-x:clip;transition:background-color .3s ease,color .3s ease}
+::selection{background:var(--hi-soft)}
+:focus-visible{outline:2px solid var(--hi);outline-offset:2px;border-radius:6px}
+a{color:inherit;text-underline-offset:.22em;text-decoration-thickness:1px;text-decoration-color:var(--ink-3)}
+a:hover{text-decoration-color:var(--ink)}
+button,input{font:inherit;color:inherit}
+/* anything clickable shows a pointer */
+a[href],button,select,summary,label[for],[role="button"]{cursor:pointer}
+button:disabled{cursor:default}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.wrap{max-width:78rem;margin:0 auto;padding:0 1.5rem}
+.muted{color:var(--ink-3)}
+
+/* controls */
+.seg{display:inline-flex;padding:3px;border-radius:999px;background:var(--soft);gap:2px}
+.seg button{border:0;background:none;height:2rem;padding:0 .8rem;border-radius:999px;font-size:.8125rem;font-weight:500;color:var(--ink-2);white-space:nowrap;transition:background-color .15s ease,color .15s ease}
+.seg button:hover{color:var(--ink)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px var(--shadow),0 0 0 1px var(--rule)}
+.seg button small{font:400 .72rem var(--mono);color:var(--ink-3);margin-left:.3rem}
+.btn{display:inline-flex;align-items:center;gap:.45rem;height:2.4rem;padding:0 1rem;border-radius:999px;border:1px solid var(--rule);background:var(--surface);color:var(--ink);font-weight:500;font-size:.875rem;text-decoration:none;transition:background-color .15s ease,border-color .15s ease,transform .12s var(--ease-out)}
+.btn:hover{background:var(--soft);border-color:var(--rule-2)}
+.btn:active{transform:scale(.97)}
+.btn.blue{background:var(--hi-btn);border-color:var(--hi-btn);color:#fff}
+.btn.blue:hover{background:var(--hi-btn-hover);border-color:var(--hi-btn-hover)}
+.btn svg{width:14px;height:14px}
+.icon{width:2.2rem;height:2.2rem;border-radius:50%;border:0;background:var(--soft);display:inline-grid;place-items:center;transition:background-color .15s ease,transform .12s var(--ease-out)}
+.icon:hover{background:var(--hover)}.icon:active{transform:scale(.94)}
+.icon svg{width:15px;height:15px}
+
+/* header */
+.top{display:flex;align-items:center;gap:1.25rem;height:4.25rem;position:relative;z-index:3}
+.brand{display:flex;align-items:center;gap:.6rem;text-decoration:none}
+.brand svg{width:22px;height:22px;color:var(--hi)}
+.brand b{font:600 1.15rem var(--display);letter-spacing:-.01em}
+.top nav{margin-left:auto;display:flex;align-items:center;gap:1.25rem;font-size:.875rem;color:var(--ink-2)}
+.top nav a{text-decoration:none}.top nav a:hover{color:var(--ink)}
+.fresh{display:inline-flex;align-items:center;gap:.45rem;font-size:.8125rem;color:var(--ink-3);white-space:nowrap}
+.fresh i{width:7px;height:7px;border-radius:50%;background:var(--ok);animation:ping 2.4s ease-out infinite}
+.show-sm{display:none}
+.fresh.stale i{background:var(--warn);animation:none}
+@keyframes ping{0%{box-shadow:0 0 0 0 rgba(60,201,142,.5)}100%{box-shadow:0 0 0 7px rgba(60,201,142,0)}}
+
+/* hero: the globe */
+.hero{position:relative;height:min(46rem,calc(100svh - 4.25rem));min-height:36rem}
+.hero canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:pan-y;cursor:grab}
+.hero canvas.dragging{cursor:grabbing}.hero canvas.pointing{cursor:pointer}
+.overlay{position:relative;z-index:2;max-width:27rem;padding-top:2.5rem;pointer-events:none}
+.overlay > *{pointer-events:auto}
+h1{font:600 clamp(2.2rem,4vw,3.3rem)/1 var(--display);letter-spacing:-.035em;text-wrap:balance}
+.lead{margin-top:.9rem;color:var(--ink-2);font-size:1.0625rem;line-height:1.5;text-wrap:pretty}
+.search{position:relative;margin-top:1.4rem}
+.search input{width:100%;height:2.75rem;border-radius:999px;border:1px solid var(--rule);background:var(--surface);padding:0 1rem 0 2.6rem;font-size:.9375rem;transition:border-color .15s ease}
+.search input:hover{border-color:var(--rule-2)}
+.search input:focus{outline:none;border-color:var(--hi);box-shadow:0 0 0 3px var(--hi-soft)}
+.search > svg{position:absolute;left:1rem;top:.85rem;width:16px;height:16px;color:var(--ink-3);pointer-events:none}
+.results{position:absolute;left:0;right:0;top:calc(100% + .35rem);background:var(--surface);border:1px solid var(--rule);border-radius:14px;box-shadow:0 12px 32px var(--shadow);padding:.3rem;list-style:none;z-index:5}
+.results button{display:flex;width:100%;align-items:baseline;gap:.6rem;border:0;background:none;text-align:left;padding:.5rem .7rem;border-radius:9px;font-size:.875rem}
+.results button:hover,.results button.on{background:var(--soft)}
+.results small{margin-left:auto;font:400 .75rem var(--mono);color:var(--ink-3)}
+.results .none{padding:.5rem .7rem;font-size:.875rem;color:var(--ink-3)}
+.ctl{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-top:.9rem}
+.clock{font:400 .8125rem var(--mono);color:var(--ink-2);margin-top:.7rem}
+.legend{display:flex;gap:1rem;margin-top:.55rem;font-size:.75rem;color:var(--ink-3)}
+.legend i{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:.35rem;vertical-align:1px}
+.card{position:absolute;right:1.5rem;top:2.5rem;z-index:2;width:min(21rem,calc(100% - 3rem));background:var(--surface);border:1px solid var(--rule);border-radius:16px;padding:1.05rem 1.15rem;box-shadow:0 12px 32px var(--shadow);opacity:0;transform:translateY(8px) scale(.98);pointer-events:none;transition:opacity .2s ease,transform .25s var(--ease-out)}
+.card.on{opacity:1;transform:none;pointer-events:auto}
+.card .x{position:absolute;top:.7rem;right:.7rem}
+.card .kind{font:500 .75rem var(--mono);color:var(--hi)}
+.card h3{font:600 1.25rem/1.2 var(--display);letter-spacing:-.01em;margin:.2rem 2.2rem 0 0}
+.card .big{font:500 2.3rem/1 var(--display);letter-spacing:-.03em;margin-top:.8rem;font-variant-numeric:tabular-nums}
+.card .big small{font:400 .875rem var(--sans);color:var(--ink-3);letter-spacing:0;margin-left:.3rem}
+.card dl{display:grid;grid-template-columns:auto 1fr;gap:.3rem .9rem;margin-top:.9rem;font-size:.8125rem}
+.card dt{color:var(--ink-3)}.card dd{text-align:right;font-family:var(--mono);font-size:.78rem}
+.card .acts{display:flex;gap:.5rem;margin-top:1rem}
+.tip{position:absolute;z-index:4;pointer-events:none;background:var(--surface);border:1px solid var(--rule);border-radius:10px;padding:.45rem .65rem;font-size:.8125rem;line-height:1.35;box-shadow:0 8px 24px var(--shadow);opacity:0;transition:opacity .12s ease}
+.tip.on{opacity:1}.tip b{display:block;font-weight:600}.tip span{color:var(--ink-3)}
+
+/* tiles */
+.tiles{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));border-top:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+.tile{padding:1.3rem 1.2rem;border-left:1px solid var(--rule)}
+.tile:first-child{border-left:0;padding-left:0}
+.tile .n{font:500 2rem/1 var(--display);letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.tile .l{margin-top:.45rem;font-size:.8125rem;color:var(--ink-3);line-height:1.35}
+.tile .n.hi{color:var(--hi)}
+
+/* panels */
+section.block{padding:4rem 0 0}
+.block-head{display:flex;align-items:baseline;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:1.3rem}
+h2{font:600 clamp(1.6rem,2.6vw,2.1rem)/1.1 var(--display);letter-spacing:-.025em}
+.block-head p{color:var(--ink-2);max-width:40rem;margin-top:.45rem;text-wrap:pretty}
+.src{font:400 .75rem var(--mono);color:var(--ink-3)}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:2.5rem}
+table{width:100%;border-collapse:collapse;font-size:.875rem}
+th{font-weight:500;color:var(--ink-3);font-size:.75rem;text-align:left;padding:0 .5rem .55rem;border-bottom:1px solid var(--rule)}
+td{padding:.6rem .5rem;border-bottom:1px solid var(--rule);vertical-align:middle}
+th.r,td.r{text-align:right}
+td.num{font-family:var(--mono);font-size:.8125rem;font-variant-numeric:tabular-nums}
+tbody tr{transition:background-color .15s ease}
+tbody tr:hover{background:var(--soft)}
+.pair b{font-weight:500}.pair small{display:block;color:var(--ink-3);font-size:.75rem}
+.watch{height:1.9rem;padding:0 .75rem;font-size:.8125rem}
+.tag{display:inline-block;font:500 .7rem var(--mono);padding:.08rem .4rem;border-radius:5px;background:var(--soft);color:var(--ink-2)}
+.tag.DEB{color:var(--debris)}.tag.PAY{color:var(--hi)}
+.counts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.75rem;margin-bottom:1.2rem}
+.counts div{border:1px solid var(--rule);border-radius:12px;padding:.8rem .95rem;background:var(--surface)}
+.counts b{display:block;font:500 1.6rem/1 var(--display);font-variant-numeric:tabular-nums}
+.counts span{font-size:.8125rem;color:var(--ink-3)}
+.up{color:var(--ok)}.down{color:var(--crit)}
+.chart{position:relative;height:16rem}
+.chart svg{display:block;width:100%;height:100%;overflow:visible}
+.axis{font:400 10.5px var(--mono);fill:var(--ink-3)}
+.readout{margin-top:.6rem;min-height:1.4rem;font-size:.8125rem;color:var(--ink-2)}
+.readout b{color:var(--ink);font-weight:600}
+.bars{display:grid;gap:.55rem}
+.bar-row{display:grid;grid-template-columns:7.5rem 1fr 4rem;gap:.75rem;align-items:center;font-size:.8125rem}
+.bar-row .track{display:flex;height:10px;border-radius:3px;overflow:hidden;background:var(--soft)}
+.bar-row .track i{display:block;height:100%}
+.bar-row .v{text-align:right;font-family:var(--mono);font-size:.78rem;color:var(--ink-2)}
+.keys{display:flex;gap:1rem;margin-top:.9rem;font-size:.75rem;color:var(--ink-3);flex-wrap:wrap}
+.keys i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:.35rem;vertical-align:-1px}
+.sub{font:600 1rem var(--display);margin:1.6rem 0 .6rem}
+
+/* how it works */
+.steps{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.75rem;counter-reset:s}
+.step{position:relative;border:1px solid var(--rule);border-radius:14px;padding:1rem;background:var(--surface)}
+.step::before{counter-increment:s;content:counter(s);font:500 .75rem var(--mono);color:var(--hi)}
+.step b{display:block;font:600 1rem var(--display);margin:.3rem 0 .3rem}
+.step p{font-size:.8125rem;color:var(--ink-2);line-height:1.45}
+.step:not(:last-child)::after{content:"";position:absolute;right:-.5rem;top:50%;width:.25rem;height:1px;background:var(--rule-2)}
+.note{margin-top:1rem;font-size:.8125rem;color:var(--ink-3);max-width:52rem}
+footer{margin-top:5rem;border-top:1px solid var(--rule);padding:1.6rem 0 2.4rem;display:flex;flex-wrap:wrap;gap:.6rem 1.6rem;font-size:.8125rem;color:var(--ink-3)}
+footer a{color:var(--ink-2)}
+footer span:first-child{margin-right:auto}
+
+@media (max-width:980px){
+  .tiles{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .tile:nth-child(4){border-left:0;padding-left:0}
+  .tile:nth-child(-n+3){border-bottom:1px solid var(--rule)}
+  .two{grid-template-columns:1fr;gap:3.5rem}
+  .steps{grid-template-columns:1fr 1fr}
+  .step::after{display:none}
+}
+@media (max-width:760px){
+  .top nav .hide-sm{display:none}
+  .top nav .show-sm{display:inline}
+  .top nav{gap:.9rem}
+  .seg button{padding:0 .62rem}
+  #n-all{display:none}
+  .hero{height:auto;min-height:0}
+  .hero canvas{position:relative;display:block;height:min(100vw,26rem)}
+  .overlay{max-width:none;padding-top:1.25rem}
+  .card{position:relative;right:auto;top:auto;width:auto;margin-top:1rem;display:none}
+  .card.on{display:block}
+  .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .tile,.tile:first-child,.tile:nth-child(4){border-left:0;padding-left:0;border-bottom:1px solid var(--rule)}
+  .tile:nth-child(even){border-left:1px solid var(--rule);padding-left:1.1rem}
+  .steps{grid-template-columns:1fr}
+  .hide-xs{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+<header class="wrap top">
+  <a class="brand" href="./" aria-label="OrbitWatch home">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="5" fill="currentColor" stroke="none"/><ellipse cx="12" cy="12" rx="10.5" ry="4" transform="rotate(-25 12 12)"/></svg>
+    <b>OrbitWatch</b>
+  </a>
+  <nav>
+    <span class="fresh" id="fresh"><i></i><span id="fresh-t">Loading…</span></span>
+    <a class="hide-sm" href="#approaches">Close approaches</a>
+    <a class="hide-sm" href="#how">How it works</a>
+    <a class="hide-sm" href="https://github.com/smymuna/orbitwatch">GitHub</a>
+    <button class="icon" id="theme" aria-label="Switch to light mode"></button>
+  </nav>
+</header>
+
+<section class="hero" id="hero" aria-label="Globe">
+  <div class="wrap">
+    <div class="overlay">
+      <h1>Every tracked object in orbit, right now.</h1>
+      <p class="lead" id="lead">Real orbital data from CelesTrak, collected every 6 hours by a Dagster and dbt pipeline and propagated with SGP4 in your browser.</p>
+      <div class="search" role="search">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="7" cy="7" r="4.6"/><path d="m10.5 10.5 3.5 3.5"/></svg>
+        <input id="q" type="search" placeholder="Find an object: ISS, Hubble, Tiangong, NORAD id" autocomplete="off" aria-label="Find an object by name or NORAD id" aria-controls="results" aria-expanded="false">
+        <ul class="results" id="results" role="listbox" hidden></ul>
+      </div>
+      <div class="ctl">
+        <div class="seg" id="filter" role="group" aria-label="Show objects">
+          <button aria-pressed="true" data-f="all">All<small id="n-all"></small></button>
+          <button aria-pressed="false" data-f="0">Satellites</button>
+          <button aria-pressed="false" data-f="1">Debris</button>
+          <button aria-pressed="false" data-f="2">Rocket bodies</button>
+        </div>
+      </div>
+      <div class="ctl">
+        <button class="icon" id="play" aria-label="Pause"></button>
+        <div class="seg" id="speed" role="group" aria-label="Simulation speed">
+          <button aria-pressed="false" data-s="1">Real time</button>
+          <button aria-pressed="true" data-s="60">60×</button>
+          <button aria-pressed="false" data-s="600">600×</button>
+        </div>
+      </div>
+      <p class="clock" id="clock" aria-live="off"></p>
+      <div class="legend"><span><i style="background:var(--sat)"></i>Satellites</span><span><i style="background:var(--debris)"></i>Debris</span><span><i style="background:var(--sat-rb)"></i>Rocket bodies</span></div>
+    </div>
+  </div>
+  <div class="card" id="card" role="dialog" aria-label="Selected object" aria-live="polite">
+    <button class="icon x" id="card-x" aria-label="Close"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
+    <div id="card-body"></div>
+  </div>
+  <div class="tip" id="tip"></div>
+</section>
+
+<main class="wrap">
+  <div class="tiles" id="tiles"></div>
+
+  <section class="block" id="approaches" aria-labelledby="ca-h">
+    <div class="block-head">
+      <div>
+        <h2 id="ca-h">Closest approaches in the next 24 hours</h2>
+        <p>Every object is propagated through the next day and screened for pairs passing within 5 km. Press Watch to fly to the encounter on the globe.</p>
+      </div>
+      <span class="src">mart_close_approaches</span>
+    </div>
+    <table>
+      <thead><tr><th>Time (UTC)</th><th>Objects</th><th class="r">Miss distance</th><th class="r hide-xs">Speed</th><th></th></tr></thead>
+      <tbody id="ca-rows"></tbody>
+    </table>
+  </section>
+
+  <div class="two">
+    <section class="block" aria-labelledby="re-h">
+      <div class="block-head"><div><h2 id="re-h">Came back down</h2><p>Objects that re-entered the atmosphere in the past week.</p></div><span class="src">fct_reentries</span></div>
+      <table><thead><tr><th>Object</th><th>Owner</th><th class="r">Re-entered</th><th class="r hide-xs">Years up</th></tr></thead><tbody id="re-rows"></tbody></table>
+      <h3 class="sub">Lowest orbits now: next to come down</h3>
+      <table><thead><tr><th>Object</th><th>Owner</th><th class="r">Perigee</th><th class="r">Apogee</th></tr></thead><tbody id="watch-rows"></tbody></table>
+      <p class="src" style="margin-top:.6rem">mart_reentry_watch</p>
+    </section>
+    <section class="block" aria-labelledby="mv-h">
+      <div class="block-head"><div><h2 id="mv-h">Manoeuvres this week</h2><p>Detected from consecutive element sets: a jump in orbit size means an engine burn.</p></div><span class="src">fct_orbit_changes</span></div>
+      <div class="counts" id="mv-counts"></div>
+      <table><thead><tr><th>Object</th><th>Change</th><th class="r">Orbit size</th><th class="r hide-xs">When</th></tr></thead><tbody id="mv-rows"></tbody></table>
+    </section>
+  </div>
+
+  <div class="two">
+    <section class="block" aria-labelledby="ln-h">
+      <div class="block-head"><div><h2 id="ln-h">Launches by year</h2><p>Hover the bars. The payload view shows how much of the recent boom is Starlink.</p></div>
+        <div class="seg" id="ln-mode" role="group" aria-label="Launch chart view"><button aria-pressed="true" data-m="launches">Launches</button><button aria-pressed="false" data-m="payloads">Payloads</button></div></div>
+      <div class="chart" id="ln-chart"></div>
+      <p class="readout" id="ln-read"></p>
+      <p class="src">mart_launches_by_year</p>
+    </section>
+    <section class="block" aria-labelledby="ow-h">
+      <div class="block-head"><div><h2 id="ow-h">Who owns what is up there</h2><p>Objects in orbit by owner, split into working payloads, debris and spent rocket bodies.</p></div><span class="src">mart_owners_in_orbit</span></div>
+      <div class="bars" id="owners"></div>
+      <div class="keys"><span><i style="background:var(--hi)"></i>Payloads</span><span><i style="background:var(--debris)"></i>Debris</span><span><i style="background:var(--sat-rb)"></i>Rocket bodies</span></div>
+    </section>
+  </div>
+
+  <section class="block" id="how" aria-labelledby="how-h">
+    <div class="block-head"><div><h2 id="how-h">How it works</h2><p>CelesTrak publishes only the present, so OrbitWatch builds its own history. The whole pipeline runs on GitHub Actions; this page is rebuilt after every run.</p></div>
+      <a class="btn" href="https://github.com/smymuna/orbitwatch">Read the code<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 8h10M9 4l4 4-4 4"/></svg></a></div>
+    <div class="steps">
+      <div class="step"><b>Collect</b><p>Every 6 hours, Dagster downloads the orbit of every object and the satellite catalogue, politely, and retries if CelesTrak is down.</p></div>
+      <div class="step"><b>Land</b><p>Raw bytes are kept exactly as received; typed Parquet files are partitioned by snapshot date.</p></div>
+      <div class="step"><b>Model</b><p>dbt on DuckDB builds the warehouse: type 2 history, orbit changes, re-entries, population and launches.</p></div>
+      <div class="step"><b>Screen</b><p>SGP4 propagates about 20,000 orbits through the next day; a KD-tree screens 200 million pairs for close approaches.</p></div>
+      <div class="step"><b>Publish</b><p>Each day's snapshot and warehouse become a GitHub release, and this page is exported from the warehouse.</p></div>
+    </div>
+    <p class="note">Close approaches are screening candidates from public orbit data (accurate to about a kilometre, degrading over days), not collision probabilities. Satellite operators use covariance-based conjunction data for that.</p>
+  </section>
+
+  <footer>
+    <span>OrbitWatch by <a href="https://smymuna.github.io/portfolio/">Mymuna Sultana</a></span>
+    <a href="https://github.com/smymuna/orbitwatch">Source on GitHub</a>
+    <a href="https://github.com/smymuna/orbitwatch/releases">Data releases</a>
+    <span>Orbital data: <a href="https://celestrak.org">CelesTrak</a></span>
+  </footer>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/satellite.js@6.0.2/dist/satellite.min.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const nf = new Intl.NumberFormat('en-GB'), D = Math.PI / 180, RE = 6371, MU = 398600.4418;
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let C = {};
+const readTheme = () => { const cs = getComputedStyle(document.documentElement); C = {};
+  ['bg', 'bg-rgb', 'ink', 'ink-2', 'ink-3', 'earth', 'earth-edge', 'land', 'sat', 'sat-rb', 'debris', 'hi', 'hi-2', 'grid', 'soft'].forEach(k => { C[k] = cs.getPropertyValue('--' + k).trim(); }); };
+readTheme();
+const easeIO = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+function tween(ms, fn) { if (reduce) { fn(1); return; } const t0 = performance.now();
+  const step = now => { const p = Math.min(1, (now - t0) / ms); fn(easeIO(p)); if (p < 1) requestAnimationFrame(step); }; requestAnimationFrame(step); }
+const svgEl = (tag, attrs = {}, parent) => { const e = document.createElementNS('http://www.w3.org/2000/svg', tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent && parent.appendChild(e); return e; };
+const setPressed = (group, btn) => group.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b === btn));
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const fmtUtc = new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
+const fmtClock = new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+const fmtDay = new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', day: 'numeric', month: 'short' });
+const TYPE = ['Satellite', 'Debris', 'Rocket body', 'Unknown'], TYPE_CODE = { PAY: 'Satellite', DEB: 'Debris', 'R/B': 'Rocket body', UNK: 'Unknown' };
+const OWNERS = { US: 'United States', CIS: 'Russia / USSR', PRC: 'China', UK: 'United Kingdom', FR: 'France', JPN: 'Japan', IND: 'India', ESA: 'ESA', GER: 'Germany',
+  IT: 'Italy', CA: 'Canada', SKOR: 'South Korea', ISS: 'ISS partners', ORB: 'ORBCOMM', GLOB: 'Globalstar', SES: 'SES', IRID: 'Iridium', EUME: 'EUMETSAT', AB: 'Arab Sat. Comms', ITSO: 'Intelsat', LUXE: 'Luxembourg', TBD: 'Unknown', SPN: 'Spain', AUS: 'Australia', ISRA: 'Israel', BRAZ: 'Brazil', NZ: 'New Zealand', FIN: 'Finland', ARGN: 'Argentina', UAE: 'UAE', TURK: 'Turkey' };
+const owner = c => OWNERS[c] || c || 'Unknown';
+const km = v => v >= 1 ? nf.format(Math.round(v)) + ' km' : Math.round(v * 1000) + ' m';
+const ago = ms => { const h = (Date.now() - ms) / 3.6e6; return h < 1 ? Math.max(1, Math.round(h * 60)) + ' min ago' : h < 48 ? Math.round(h) + ' h ago' : Math.round(h / 24) + ' days ago'; };
+
+/* ------------------------------------------------------------------ globe */
+const ommOf = o => ({ OBJECT_NAME: o[1], OBJECT_ID: '', EPOCH: new Date(o[2]).toISOString().slice(0, -1), MEAN_MOTION: o[3], ECCENTRICITY: o[4],
+  INCLINATION: o[5], RA_OF_ASC_NODE: o[6], ARG_OF_PERICENTER: o[7], MEAN_ANOMALY: o[8], EPHEMERIS_TYPE: 0, CLASSIFICATION_TYPE: 'U',
+  NORAD_CAT_ID: o[0], ELEMENT_SET_NO: 999, REV_AT_EPOCH: 0, BSTAR: o[9], MEAN_MOTION_DOT: 0, MEAN_MOTION_DDOT: 0 });
+// positions for ~20,000 objects are computed off the main thread, a frame or two ahead
+const workerSrc = `importScripts('https://cdn.jsdelivr.net/npm/satellite.js@6.0.2/dist/satellite.min.js');
+let recs = [], ep = [];
+onmessage = e => {
+  const m = e.data;
+  if (m.type === 'init') { recs = m.omm.map(o => { try { return satellite.json2satrec(o); } catch (_) { return null; } }); ep = m.epochs; postMessage({ type: 'ready' }); return; }
+  const t = m.t, n = recs.length, out = new Float32Array(n * 3);
+  const g = satellite.gstime(new Date(t)), c = Math.cos(g), s = Math.sin(g);
+  for (let i = 0; i < n; i++) {
+    const r = recs[i]; let p = null;
+    if (r) { const pv = satellite.sgp4(r, (t - ep[i]) / 60000); p = pv && pv.position; }
+    if (p && isFinite(p.x)) { out[i*3] = p.x*c + p.y*s; out[i*3+1] = -p.x*s + p.y*c; out[i*3+2] = p.z; }
+    else out[i*3] = out[i*3+1] = out[i*3+2] = NaN;
+  }
+  postMessage({ type: 'pos', t, buf: out }, [out.buffer]);
+};`;
+
+const hero = $('#hero'), canvas = document.createElement('canvas');
+canvas.setAttribute('role', 'img');
+canvas.setAttribute('aria-label', 'Interactive globe of every object tracked by OrbitWatch. Drag to rotate, click an object for details.');
+hero.prepend(canvas);
+const ctx = canvas.getContext('2d');
+const narrow = () => innerWidth <= 760;
+const G = { w: 0, h: 0, dpr: 1, cx: 0, cy: 0, R: 1, zoom: 1, lon: -60 * D, lat: 20 * D, vlon: 0, vlat: 0, drag: null, moved: 0,
+  speed: reduce ? 0 : 60, lastSpeed: 60, sim: Date.now(), wall: performance.now(), filter: 'all', hover: -1, mouse: null,
+  mode: 'all', sel: -1, idleAt: 0, visible: true, ready: false, fade: 0 };
+let objs = [], types, names, n = 0, land, P, SX, SY, DZ, A = null, B = null, busy = false, worker, pair = null, tracks = null, orbit = null, cost = 120;
+
+function size() {
+  const r = canvas.getBoundingClientRect();
+  G.dpr = Math.min(devicePixelRatio || 1, 2); G.w = r.width; G.h = r.height;
+  canvas.width = Math.round(G.w * G.dpr); canvas.height = Math.round(G.h * G.dpr);
+  if (narrow()) { G.cx = G.w / 2; G.cy = G.h / 2; G.R = Math.min(G.w, G.h) * .34; }
+  else { G.cx = G.w * .6; G.cy = G.h * .52; G.R = Math.min(G.w * .5, G.h) * .34; }
+}
+addEventListener('resize', size);
+
+function request() {
+  if (!G.ready || busy) return;
+  busy = true;
+  const lead = G.speed ? Math.max(120, cost * 1.3) * G.speed : 0;
+  worker.postMessage({ type: 'pos', t: G.sim + lead }); request.sent = performance.now();
+}
+function resetPositions() { A = B = null; if (pair) pair.prev = null; if (!busy) request(); }
+function positions() {
+  if (!B) return false;
+  if (!A || G.speed === 0 || B.t === A.t) { P = B.buf; return true; }
+  const f = Math.max(0, Math.min(1.6, (G.sim - A.t) / (B.t - A.t))), a = A.buf, b = B.buf;
+  for (let i = 0; i < a.length; i++) P[i] = a[i] + (b[i] - a[i]) * f;
+  return true;
+}
+function proj(x, y, z, k, cl, sl, cp, sp) {
+  const x1 = x*cl + y*sl, y1 = -x*sl + y*cl, x2 = x1*cp + z*sp, z2 = -x1*sp + z*cp;
+  return [G.cx + y1*k, G.cy - z2*k, x2 > 0 || y1*y1 + z2*z2 > RE*RE];
+}
+const bucket = t => t === 3 ? 2 : t;
+function draw() {
+  const { w, h, cx, cy, dpr } = G, k = G.R * G.zoom / RE;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
+  const cl = Math.cos(G.lon), sl = Math.sin(G.lon), cp = Math.cos(G.lat), sp = Math.sin(G.lat);
+  ctx.fillStyle = C.earth; ctx.beginPath(); ctx.arc(cx, cy, RE * k, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = C['earth-edge']; ctx.lineWidth = 1; ctx.stroke();
+  if (land) {
+    ctx.fillStyle = C.land; const s = Math.min(3.4, 2.3 * Math.sqrt(G.zoom));
+    for (let i = 0; i < land.length; i += 3) {
+      const x = land[i], y = land[i+1], z = land[i+2], x1 = x*cl + y*sl, y1 = -x*sl + y*cl, x2 = x1*cp + z*sp;
+      if (x2 <= 0) continue;
+      ctx.fillRect(cx + y1*k - s/2, cy - (-x1*sp + z*cp)*k - s/2, s, s);
+    }
+  }
+  if (!positions()) return;
+  for (let i = 0; i < n; i++) {
+    const x = P[i*3], y = P[i*3+1], z = P[i*3+2];
+    if (x !== x) { DZ[i] = -Infinity; continue; }
+    const x1 = x*cl + y*sl, y1 = -x*sl + y*cl, x2 = x1*cp + z*sp, z2 = -x1*sp + z*cp;
+    SX[i] = cx + y1*k; SY[i] = cy - z2*k;
+    DZ[i] = (x2 > 0 || y1*y1 + z2*z2 > RE*RE) ? (x2 > 0 ? 1 : .3) : -Infinity;
+  }
+  const cols = [C.sat, C.debris, C['sat-rb']], dim = G.mode === 'pair' || G.sel >= 0, fade = (dim ? .35 : 1) * G.fade, s = 1.35;
+  if (fade > .01) for (const pass of [.3, 1]) for (let t = 0; t < 3; t++) {
+    if (G.filter !== 'all' && +G.filter !== t) continue;
+    ctx.fillStyle = cols[t]; ctx.globalAlpha = (pass === 1 ? (t === 1 ? .85 : .45) : .2) * fade;
+    for (let i = 0; i < n; i++) {
+      if (DZ[i] !== pass || bucket(types[i]) !== t) continue;
+      const x = SX[i], y = SY[i];
+      if (x < -4 || y < -4 || x > w + 4 || y > h + 4) continue;
+      ctx.fillRect(x - s/2, y - s/2, s, s);
+    }
+  }
+  ctx.globalAlpha = 1;
+  if (G.sel >= 0 && orbit) drawSelected(k, cl, sl, cp, sp);
+  if (G.mode === 'pair' && pair) drawPair(k, cl, sl, cp, sp);
+  if (!narrow()) { // keep the text column readable whatever the globe does behind it
+    const g = ctx.createLinearGradient(0, 0, w * .48, 0);
+    g.addColorStop(0, `rgba(${C['bg-rgb']},.95)`); g.addColorStop(.7, `rgba(${C['bg-rgb']},.85)`); g.addColorStop(1, `rgba(${C['bg-rgb']},0)`);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, w * .48, h);
+  }
+  if (G.hover >= 0 && DZ[G.hover] > 0) { ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(SX[G.hover], SY[G.hover], 6, 0, Math.PI * 2); ctx.stroke(); }
+}
+function ecef(rec, t) {
+  const pv = satellite.sgp4(rec.sat, (t - rec.ep) / 60000); if (!pv || !pv.position || !isFinite(pv.position.x)) return null;
+  const p = pv.position, g = satellite.gstime(new Date(t)), c = Math.cos(g), s = Math.sin(g);
+  return [p.x*c + p.y*s, -p.x*s + p.y*c, p.z];
+}
+function drawLabel(x, y, text, color, right) {
+  ctx.fillStyle = C.bg; ctx.beginPath(); ctx.arc(x, y, 7, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, 4.5, 0, Math.PI * 2); ctx.fill();
+  ctx.font = '500 12px "JetBrains Mono", monospace'; ctx.fillStyle = C.ink; ctx.textAlign = right ? 'right' : 'left';
+  ctx.fillText(text, x + (right ? -12 : 12), y + (right ? 16 : -10));
+}
+/* the selected object's orbit: one revolution in the inertial frame, turned to the Earth's current angle */
+function drawSelected(k, cl, sl, cp, sp) {
+  const g = satellite.gstime(new Date(G.sim)), c = Math.cos(g), s = Math.sin(g);
+  ctx.strokeStyle = C.hi; ctx.lineWidth = 1.5; ctx.beginPath(); let pen = false;
+  for (const p of orbit.eci) {
+    const [x, y, vis] = proj(p[0]*c + p[1]*s, -p[0]*s + p[1]*c, p[2], k, cl, sl, cp, sp);
+    if (!vis) { pen = false; continue; } pen ? ctx.lineTo(x, y) : ctx.moveTo(x, y); pen = true;
+  }
+  ctx.stroke();
+  const now = ecef(orbit.rec, G.sim);
+  if (now) { const [x, y, vis] = proj(now[0], now[1], now[2], k, cl, sl, cp, sp); if (vis) drawLabel(x, y, names[G.sel], C.hi); }
+}
+function drawPair(k, cl, sl, cp, sp) {
+  const cols = [C.hi, C['hi-2']];
+  tracks.forEach((tr, j) => {
+    ctx.strokeStyle = cols[j]; ctx.lineWidth = 1.5; ctx.setLineDash(j ? [5, 4] : []); ctx.beginPath(); let pen = false;
+    for (const p of tr) { const [x, y, vis] = proj(p[0], p[1], p[2], k, cl, sl, cp, sp); if (!vis) { pen = false; continue; } pen ? ctx.lineTo(x, y) : ctx.moveTo(x, y); pen = true; }
+    ctx.stroke();
+  });
+  ctx.setLineDash([]);
+  pair.now.forEach((p, j) => { if (!p) return; const [x, y, vis] = proj(p[0], p[1], p[2], k, cl, sl, cp, sp); if (vis) drawLabel(x, y, pair.names[j], cols[j], j); });
+}
+
+function frame(now) {
+  const dt = Math.min(64, now - G.wall); G.wall = now;
+  G.sim += dt * G.speed;
+  if (!G.drag) {
+    G.lon += G.vlon * dt; G.lat = Math.max(-1.3, Math.min(1.3, G.lat + G.vlat * dt)); G.vlon *= .93; G.vlat *= .93;
+    if (G.mode === 'all' && G.sel < 0 && !reduce && now - G.idleAt > 2500) G.lon += .00003 * dt;
+  }
+  if (G.mode === 'pair') updatePair();
+  if (G.sel >= 0) updateCard();
+  if (G.mouse && !G.drag) pick();
+  draw();
+  $('#clock').textContent = fmtClock.format(G.sim) + ' UTC' + (G.speed === 1 ? ' · live' : G.speed ? ` · ${G.speed}× speed` : ' · paused');
+  request();
+  if (G.visible && !document.hidden) requestAnimationFrame(frame); else frame.stopped = true;
+}
+function start() { if (frame.stopped) { frame.stopped = false; G.wall = performance.now(); requestAnimationFrame(frame); } }
+new IntersectionObserver(es => { G.visible = es[0].isIntersecting; if (G.visible) start(); }).observe(hero);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) start(); });
+
+/* hover, drag and click */
+const tip = $('#tip');
+function pick() {
+  const { x, y } = G.mouse; let best = -1, bd = 90;
+  if (P) for (let i = 0; i < n; i++) {
+    if (DZ[i] !== 1 || (G.filter !== 'all' && +G.filter !== bucket(types[i]))) continue;
+    const dx = SX[i] - x, dy = SY[i] - y, d = dx*dx + dy*dy;
+    if (d < bd) { bd = d; best = i; }
+  }
+  if (best !== G.hover) {
+    G.hover = best;
+    if (best >= 0) tip.innerHTML = `<b>${esc(names[best])}</b><span>${TYPE[types[best]]} · ${nf.format(Math.round(Math.hypot(P[best*3], P[best*3+1], P[best*3+2]) - RE))} km up · click for details</span>`;
+    tip.classList.toggle('on', best >= 0); canvas.classList.toggle('pointing', best >= 0);
+  }
+  if (best >= 0) {
+    const hr = hero.getBoundingClientRect(), cr = canvas.getBoundingClientRect();
+    let tx = cr.left - hr.left + SX[best] + 14, ty = cr.top - hr.top + SY[best] - 14 - tip.offsetHeight;
+    if (tx + tip.offsetWidth > hr.width - 8) tx -= tip.offsetWidth + 28;
+    tip.style.left = tx + 'px'; tip.style.top = Math.max(8, ty) + 'px';
+  }
+}
+canvas.addEventListener('pointerdown', e => {
+  G.drag = { x: e.clientX, y: e.clientY, t: performance.now() }; G.moved = 0; G.vlon = G.vlat = 0;
+  canvas.setPointerCapture(e.pointerId); canvas.classList.add('dragging');
+});
+canvas.addEventListener('pointermove', e => {
+  const r = canvas.getBoundingClientRect(); G.mouse = { x: e.clientX - r.left, y: e.clientY - r.top }; G.idleAt = performance.now();
+  if (!G.drag) return;
+  const now = performance.now(), dt = Math.max(1, now - G.drag.t), f = .0055 / G.zoom;
+  const dl = -(e.clientX - G.drag.x) * f, dp = (e.clientY - G.drag.y) * f;
+  G.moved += Math.abs(e.clientX - G.drag.x) + Math.abs(e.clientY - G.drag.y);
+  if (G.moved > 4) { tip.classList.remove('on'); G.hover = -1; }
+  G.lon += dl; G.lat = Math.max(-1.3, Math.min(1.3, G.lat + dp)); G.vlon = dl / dt; G.vlat = dp / dt; G.drag = { x: e.clientX, y: e.clientY, t: now };
+});
+canvas.addEventListener('pointerup', () => {
+  const click = G.drag && G.moved <= 4;
+  G.drag = null; canvas.classList.remove('dragging'); G.idleAt = performance.now();
+  if (click && G.hover >= 0) select(G.hover);
+});
+canvas.addEventListener('pointercancel', () => { G.drag = null; canvas.classList.remove('dragging'); });
+canvas.addEventListener('pointerleave', () => { G.mouse = null; G.hover = -1; tip.classList.remove('on'); canvas.classList.remove('pointing'); });
+
+/* turn the globe to face a point and zoom */
+function flyTo(p, zoom) {
+  const tl = Math.atan2(p[1], p[0]), tp = Math.atan2(p[2], Math.hypot(p[0], p[1]));
+  const l0 = G.lon, p0 = G.lat, z0 = G.zoom; let dl = tl - l0; dl = Math.atan2(Math.sin(dl), Math.cos(dl));
+  G.vlon = G.vlat = 0; tween(1300, f => { G.lon = l0 + dl * f; G.lat = p0 + (tp - p0) * f; G.zoom = z0 + (zoom - z0) * f; });
+}
+
+/* selecting one object */
+const card = $('#card'), cardBody = $('#card-body');
+function select(i) {
+  if (G.mode === 'pair') exitPair(true);
+  G.sel = i; const o = objs[i], rec = { sat: satellite.json2satrec(ommOf(o)), ep: o[2] };
+  const period = 1440 / o[3], a = Math.cbrt(MU * Math.pow(period * 60 / (2 * Math.PI), 2));
+  const eci = []; for (let m = 0; m <= period; m += period / 160) { const pv = satellite.sgp4(rec.sat, (G.sim - rec.ep) / 60000 + m); if (pv && pv.position && isFinite(pv.position.x)) eci.push([pv.position.x, pv.position.y, pv.position.z]); }
+  orbit = { rec, eci, period, perigee: a * (1 - o[4]) - 6378.137, apogee: a * (1 + o[4]) - 6378.137 };
+  cardBody.innerHTML = `<p class="kind">${TYPE[o[10]]} · NORAD ${o[0]}</p><h3>${esc(o[1])}</h3>
+    <p class="big" id="sel-alt">–</p>
+    <dl><dt>Owner</dt><dd>${esc(owner(o[11]))}</dd><dt>Speed</dt><dd id="sel-v">–</dd>
+    <dt>Orbit</dt><dd>${nf.format(Math.round(orbit.perigee))} × ${nf.format(Math.round(orbit.apogee))} km</dd>
+    <dt>Inclination</dt><dd>${o[5].toFixed(1)}°</dd><dt>Period</dt><dd>${period < 200 ? period.toFixed(1) + ' min' : (period / 60).toFixed(1) + ' h'}</dd>
+    <dt>Element set</dt><dd>${ago(o[2])}</dd></dl>
+    <div class="acts"><button class="btn blue" id="sel-go">Fly to it</button><a class="btn" href="https://celestrak.org/satcat/table-satcat.php?CATNR=${o[0]}" target="_blank" rel="noopener">Catalogue</a></div>`;
+  $('#sel-go').addEventListener('click', () => { const p = ecef(rec, G.sim); if (p) flyTo(p, Math.max(1.6, Math.min(2.4, 2.8 - orbit.apogee / 8000))); });
+  card.classList.add('on');
+  const p = ecef(rec, G.sim); if (p) flyTo(p, orbit.apogee > 20000 ? .8 : 1.6);
+  updateCard();
+}
+function updateCard() {
+  if (G.sel < 0 || !orbit) return;
+  const pv = satellite.sgp4(orbit.rec.sat, (G.sim - orbit.rec.ep) / 60000);
+  if (!pv || !pv.position) return;
+  const alt = Math.hypot(pv.position.x, pv.position.y, pv.position.z) - RE, v = Math.hypot(pv.velocity.x, pv.velocity.y, pv.velocity.z);
+  const el = $('#sel-alt'); if (el) el.innerHTML = `${nf.format(Math.round(alt))}<small>km up</small>`;
+  const ve = $('#sel-v'); if (ve) ve.textContent = v.toFixed(2) + ' km/s';
+}
+function deselect() { G.sel = -1; orbit = null; card.classList.remove('on'); tween(700, (z0 => f => { G.zoom = z0 + (1 - z0) * f; })(G.zoom)); }
+$('#card-x').addEventListener('click', () => { if (G.mode === 'pair') exitPair(); else deselect(); });
+addEventListener('keydown', e => { if (e.key === 'Escape' && (G.sel >= 0 || G.mode === 'pair')) { G.mode === 'pair' ? exitPair() : deselect(); } });
+
+/* close-approach mode: both objects, their tracks, and a live distance */
+function enterPair(c) { // a row of stats.close_approaches
+  const ia = byNorad.get(c.norad_a), ib = byNorad.get(c.norad_b);
+  if (ia == null || ib == null) return;
+  G.sel = -1; orbit = null;
+  const recs = [ia, ib].map(i => ({ sat: satellite.json2satrec(ommOf(objs[i])), ep: objs[i][2] }));
+  pair = { recs, tca: c.tca_ms, names: [c.object_a, c.object_b], now: [null, null], min: Infinity, prev: null };
+  tracks = recs.map(r => { const out = []; for (let m = -40; m <= 40; m += .5) { const p = ecef(r, c.tca_ms + m * 60000); p && out.push(p); } return out; });
+  cardBody.innerHTML = `<p class="kind">Close approach</p><h3>${esc(c.object_a)} and ${esc(c.object_b)}</h3>
+    <p class="big" id="pr-d">–</p><p class="muted" style="font-size:.8125rem;margin-top:.3rem">distance right now, computed with SGP4 in your browser</p>
+    <dl><dt>OrbitWatch predicted</dt><dd>${km(c.miss_km)}</dd><dt>At</dt><dd>${fmtClock.format(c.tca_ms)} UTC</dd>
+    <dt>Time to closest</dt><dd id="pr-t">–</dd><dt>Closest seen so far</dt><dd id="pr-min">–</dd><dt>Relative speed</dt><dd>${c.speed_kms.toFixed(1)} km/s</dd>
+    <dt>Owners</dt><dd>${esc(owner(c.owner_a))} · ${esc(owner(c.owner_b))}</dd></dl>`;
+  card.classList.add('on');
+  G.mode = 'pair'; G.sim = c.tca_ms - 7 * 60000; G.speed = G.lastSpeed = 20; syncPlay(); setPressed($('#speed'), null); resetPositions();
+  const tgt = ecef(recs[0], c.tca_ms); if (tgt) flyTo(tgt, 2.6);
+}
+function updatePair() {
+  const a = ecef(pair.recs[0], G.sim), b = ecef(pair.recs[1], G.sim); pair.now = [a, b];
+  if (!a || !b) return;
+  const rel = [a[0]-b[0], a[1]-b[1], a[2]-b[2]], d = Math.hypot(...rel), r0 = pair.prev;
+  // frames are far apart at speed: solve the straight-line closest point between the last two samples
+  if (r0 && Math.abs(G.sim - pair.tca) < 20 * 60000) {
+    const v = [rel[0]-r0[0], rel[1]-r0[1], rel[2]-r0[2]], vv = v[0]*v[0] + v[1]*v[1] + v[2]*v[2];
+    const tau = vv ? Math.max(0, Math.min(1, -(r0[0]*v[0] + r0[1]*v[1] + r0[2]*v[2]) / vv)) : 0;
+    pair.min = Math.min(pair.min, d, Math.hypot(r0[0] + v[0]*tau, r0[1] + v[1]*tau, r0[2] + v[2]*tau));
+  }
+  pair.prev = rel;
+  $('#pr-d').textContent = km(d); $('#pr-min').textContent = pair.min < Infinity ? km(pair.min) : '–';
+  const dtS = Math.round((pair.tca - G.sim) / 1000), a2 = Math.abs(dtS);
+  $('#pr-t').textContent = `T${dtS >= 0 ? '−' : '+'}${String(Math.floor(a2 / 60)).padStart(2, '0')}:${String(a2 % 60).padStart(2, '0')}`;
+}
+function exitPair(keepCard) {
+  if (G.mode !== 'pair') return;
+  G.mode = 'all'; pair = null; tracks = null; G.sim = Date.now(); G.speed = G.lastSpeed = reduce ? 0 : 60;
+  setPressed($('#speed'), $('#speed [data-s="60"]')); syncPlay(); resetPositions();
+  if (!keepCard) { card.classList.remove('on'); tween(900, (z0 => f => { G.zoom = z0 + (1 - z0) * f; })(G.zoom)); }
+}
+
+/* controls */
+$('#filter').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; G.filter = b.dataset.f; setPressed($('#filter'), b); G.hover = -1; });
+const playBtn = $('#play');
+const PAUSE = '<svg viewBox="0 0 16 16" fill="currentColor"><rect x="4" y="3" width="3" height="10" rx=".8"/><rect x="9" y="3" width="3" height="10" rx=".8"/></svg>';
+const PLAY = '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M5 3.2v9.6a.6.6 0 0 0 .9.5l7.6-4.8a.6.6 0 0 0 0-1L5.9 2.7a.6.6 0 0 0-.9.5z"/></svg>';
+const syncPlay = () => { playBtn.innerHTML = G.speed ? PAUSE : PLAY; playBtn.setAttribute('aria-label', G.speed ? 'Pause' : 'Play'); };
+playBtn.addEventListener('click', () => { if (G.speed) { G.lastSpeed = G.speed; G.speed = 0; } else G.speed = G.lastSpeed || 60; syncPlay(); resetPositions(); });
+$('#speed').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return;
+  if (G.mode === 'pair') exitPair(true);
+  G.speed = G.lastSpeed = +b.dataset.s; if (G.speed === 1) G.sim = Date.now(); setPressed($('#speed'), b); syncPlay(); resetPositions(); });
+if (reduce) { setPressed($('#speed'), null); }
+syncPlay();
+
+/* search */
+const q = $('#q'), results = $('#results');
+let hits = [], hitI = 0, byNorad = new Map(), searchIdx = [];
+function showResults() {
+  const s = q.value.trim().toUpperCase();
+  if (!s || !n) { results.hidden = true; q.setAttribute('aria-expanded', 'false'); return; }
+  const num = /^\d+$/.test(s) ? +s : null;
+  hits = [];
+  if (num != null && byNorad.has(num)) hits.push(byNorad.get(num));
+  for (let i = 0; i < n && hits.length < 8; i++) if (searchIdx[i].startsWith(s) && !hits.includes(i)) hits.push(i);
+  for (let i = 0; i < n && hits.length < 8; i++) if (searchIdx[i].includes(s) && !hits.includes(i)) hits.push(i);
+  hitI = 0;
+  results.innerHTML = hits.length ? hits.map((i, j) => `<li><button role="option" data-i="${i}" class="${j === 0 ? 'on' : ''}">${esc(names[i])}<small>${TYPE[types[i]]} · ${objs[i][0]}</small></button></li>`).join('')
+    : '<li class="none">No object with that name in this snapshot.</li>';
+  results.hidden = false; q.setAttribute('aria-expanded', 'true');
+}
+q.addEventListener('input', showResults);
+q.addEventListener('keydown', e => {
+  if (results.hidden || !hits.length) return;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); hitI = (hitI + (e.key === 'ArrowDown' ? 1 : -1) + hits.length) % hits.length;
+    results.querySelectorAll('button').forEach((b, j) => b.classList.toggle('on', j === hitI)); }
+  if (e.key === 'Enter') { e.preventDefault(); choose(hits[hitI]); }
+  if (e.key === 'Escape') { results.hidden = true; }
+});
+results.addEventListener('click', e => { const b = e.target.closest('button'); if (b) choose(+b.dataset.i); });
+document.addEventListener('click', e => { if (!e.target.closest('.search')) results.hidden = true; });
+function choose(i) { results.hidden = true; q.value = names[i]; q.blur(); if (G.filter !== 'all' && +G.filter !== bucket(types[i])) { G.filter = 'all'; setPressed($('#filter'), $('#filter [data-f="all"]')); } select(i); }
+
+/* ------------------------------------------------------------------ panels */
+let S = null, lnMode = 'launches';
+function tiles(o, s) {
+  const re = s.reentries.length, closest = s.close_approaches[0];
+  $('#tiles').innerHTML = [
+    [nf.format(o.in_orbit[0]), 'objects in orbit', 'hi'],
+    [nf.format(o.in_orbit[1]), 'satellites'], [nf.format(o.in_orbit[2]), 'pieces of debris'], [nf.format(o.in_orbit[3]), 'rocket bodies'],
+    [nf.format(o.pairs_5km), 'pairs within 5 km, next 24 h'],
+    [closest ? km(closest.miss_km) : '–', 'closest predicted approach'],
+  ].map(([v, l, c]) => `<div class="tile"><div class="n ${c || ''}">${v}</div><div class="l">${l}</div></div>`).join('');
+}
+function tables(s) {
+  $('#ca-rows').innerHTML = s.close_approaches.slice(0, 12).map((c, i) => `<tr>
+    <td class="num">${fmtUtc.format(c.tca_ms)}</td>
+    <td class="pair"><b>${esc(c.object_a)}</b> × <b>${esc(c.object_b)}</b><small>${esc(owner(c.owner_a))} · ${esc(owner(c.owner_b))}</small></td>
+    <td class="r num">${km(c.miss_km)}</td><td class="r num hide-xs">${c.speed_kms.toFixed(1)} km/s</td>
+    <td class="r"><button class="btn watch" data-i="${i}">Watch</button></td></tr>`).join('');
+  $('#re-rows').innerHTML = s.reentries.slice(0, 10).map(r => `<tr><td><span class="tag ${r.type === 'R/B' ? 'RB' : esc(r.type)}">${esc(r.type)}</span> ${esc(r.name)}</td>
+    <td>${esc(owner(r.owner))}</td><td class="r num">${fmtDay.format(Date.parse(r.decay_date))}</td><td class="r num hide-xs">${r.days_in_orbit != null ? (r.days_in_orbit / 365.25).toFixed(1) : '–'}</td></tr>`).join('')
+    || '<tr><td colspan="4" class="muted">No re-entries reported this week.</td></tr>';
+  $('#watch-rows').innerHTML = s.reentry_watch.slice(0, 8).map(r => `<tr><td><span class="tag ${r.type === 'R/B' ? 'RB' : esc(r.type)}">${esc(r.type)}</span> ${esc(r.name)}</td>
+    <td>${esc(owner(r.owner))}</td><td class="r num">${nf.format(r.perigee_km)} km</td><td class="r num">${nf.format(r.apogee_km)} km</td></tr>`).join('');
+  const bt = s.orbit_changes.by_type;
+  $('#mv-counts').innerHTML = [['raise', 'orbits raised'], ['lower', 'orbits lowered'], ['plane_change', 'plane changes']]
+    .map(([k, l]) => `<div><b>${nf.format(bt[k] || 0)}</b><span>${l}</span></div>`).join('');
+  $('#mv-rows').innerHTML = s.orbit_changes.largest.slice(0, 8).map(r => `<tr><td>${esc(r.name)}</td>
+    <td>${r.change_type === 'raise' ? '<span class="up">raised</span>' : r.change_type === 'lower' ? '<span class="down">lowered</span>' : 'plane change'}</td>
+    <td class="r num">${r.delta_km > 0 ? '+' : ''}${nf.format(r.delta_km)} km</td><td class="r num hide-xs">${fmtDay.format(r.epoch_ms)}</td></tr>`).join('');
+  $('#ca-rows').querySelectorAll('.watch').forEach(b => b.addEventListener('click', () => {
+    if (!G.ready) { b.textContent = 'Loading…'; return; }
+    hero.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth' }); enterPair(S.close_approaches[+b.dataset.i]);
+  }));
+}
+function owners(s) {
+  const max = Math.max(...s.owners.map(o => o.objects));
+  $('#owners').innerHTML = s.owners.map(o => `<div class="bar-row"><span>${esc(owner(o.owner))}</span>
+    <span class="track" style="width:${(o.objects / max * 100).toFixed(1)}%" title="${nf.format(o.payloads)} payloads, ${nf.format(o.debris)} debris, ${nf.format(o.rocket_bodies)} rocket bodies">
+    <i style="width:${(o.payloads / o.objects * 100).toFixed(1)}%;background:var(--hi)"></i><i style="width:${(o.debris / o.objects * 100).toFixed(1)}%;background:var(--debris)"></i><i style="width:${(o.rocket_bodies / o.objects * 100).toFixed(1)}%;background:var(--sat-rb)"></i></span>
+    <span class="v">${nf.format(o.objects)}</span></div>`).join('');
+}
+function launches() {
+  if (!S) return;
+  const rows = S.launches_by_year, box = $('#ln-chart'), W = box.clientWidth, H = box.clientHeight, pl = 36, pr = 4, pt = 8, pb = 22;
+  const val = r => lnMode === 'launches' ? r.launches : r.payloads, max = Math.ceil(Math.max(...rows.map(val)) / 100) * 100;
+  const bw = (W - pl - pr) / rows.length, Y = v => pt + (H - pt - pb) * (1 - v / max);
+  box.innerHTML = '';
+  const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': `${lnMode === 'launches' ? 'Orbital launches' : 'Payloads launched'} per year since 1957` }, box);
+  for (let v = 0; v <= max; v += max / 4) { svgEl('line', { x1: pl, x2: W - pr, y1: Y(v), y2: Y(v), stroke: C.grid }, svg); svgEl('text', { x: pl - 6, y: Y(v) + 3.5, 'text-anchor': 'end', class: 'axis' }, svg).textContent = nf.format(v); }
+  const read = r => { const last = r === rows.at(-1);
+    $('#ln-read').innerHTML = `<b>${r.year}${last ? ' so far' : ''}:</b> ${nf.format(r.launches)} launches, ${nf.format(r.payloads)} payloads${r.starlink_payloads ? `, of which ${nf.format(r.starlink_payloads)} Starlink` : ''}`; };
+  rows.forEach((r, i) => {
+    const x = pl + i * bw, g = svgEl('g', {}, svg), v = val(r);
+    svgEl('rect', { x: x + bw * .12, y: Y(v), width: bw * .76, height: Y(0) - Y(v), fill: lnMode === 'payloads' ? C['ink-3'] : C.hi, rx: 1 }, g);
+    if (lnMode === 'payloads' && r.starlink_payloads) svgEl('rect', { x: x + bw * .12, y: Y(r.starlink_payloads), width: bw * .76, height: Y(0) - Y(r.starlink_payloads), fill: C.hi, rx: 1 }, g);
+    if (r.year % 10 === 0) svgEl('text', { x: x + bw / 2, y: H - 6, 'text-anchor': 'middle', class: 'axis' }, svg).textContent = r.year;
+    svgEl('rect', { x, y: pt, width: bw, height: H - pt - pb, fill: 'transparent' }, g);
+    g.addEventListener('pointerenter', () => { read(r); g.querySelector('rect').setAttribute('opacity', .7); });
+    g.addEventListener('pointerleave', () => g.querySelector('rect').setAttribute('opacity', 1));
+  });
+  read(rows.at(-2) || rows.at(-1));
+}
+$('#ln-mode').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; lnMode = b.dataset.m; setPressed($('#ln-mode'), b); launches(); });
+new ResizeObserver(() => launches()).observe($('#ln-chart'));
+
+/* ------------------------------------------------------------------ boot */
+size(); frame.stopped = true; start();
+Promise.all(['data/orbits.json', 'data/stats.json', 'data/land.json'].map(u => fetch(u).then(r => { if (!r.ok) throw new Error(u); return r.json(); }))).then(([o, s, l]) => {
+  S = s; objs = o.objects; n = objs.length;
+  types = Uint8Array.from(objs, x => x[10]); names = objs.map(x => x[1]); searchIdx = names.map(x => x.toUpperCase());
+  objs.forEach((x, i) => byNorad.set(x[0], i));
+  P = new Float32Array(n * 3); SX = new Float32Array(n); SY = new Float32Array(n); DZ = new Float32Array(n);
+  land = new Float32Array(l.length / 2 * 3);
+  for (let i = 0, j = 0; i < l.length; i += 2, j += 3) { const lo = l[i] * D, la = l[i+1] * D;
+    land[j] = RE * Math.cos(la) * Math.cos(lo); land[j+1] = RE * Math.cos(la) * Math.sin(lo); land[j+2] = RE * Math.sin(la); }
+  const snap = Date.parse(o.snapshot_at || o.snapshot), hours = (Date.now() - snap) / 3.6e6;
+  $('#fresh-t').innerHTML = `<span class="hide-sm">Data from ${fmtUtc.format(snap)} UTC · </span><span class="show-sm">Updated </span>${ago(snap)}`;
+  $('#fresh').classList.toggle('stale', hours > 30);
+  $('#fresh').title = hours > 30 ? 'The last collection is older than expected; CelesTrak may have been unreachable.' : 'Collected by the pipeline on GitHub Actions';
+  $('#n-all').textContent = nf.format(n);
+  $('#lead').textContent = `${nf.format(n)} objects from CelesTrak, collected every 6 hours by a Dagster and dbt pipeline and propagated with SGP4 in your browser. Drag the globe, or click any dot.`;
+  tiles(o, s); tables(s); owners(s); launches();
+  worker = new Worker(URL.createObjectURL(new Blob([workerSrc], { type: 'text/javascript' })));
+  worker.onmessage = e => {
+    const m = e.data;
+    if (m.type === 'ready') { G.ready = true; tween(900, f => { G.fade = f; }); request(); return; }
+    cost = .8 * cost + .2 * (performance.now() - request.sent);
+    A = B; B = { t: m.t, buf: m.buf }; busy = false;
+    if (A && (B.t < A.t || B.t - A.t > 6e5 * Math.max(1, G.speed / 60))) A = null;
+  };
+  worker.postMessage({ type: 'init', omm: objs.map(ommOf), epochs: objs.map(x => x[2]) });
+}).catch(() => { $('#fresh-t').textContent = 'Data could not be loaded'; $('#fresh').classList.add('stale'); });
+
+/* ------------------------------------------------------------------ theme: dark by default */
+const SUN = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="3"/><path d="M8 1.5v1.3M8 13.2v1.3M1.5 8h1.3M13.2 8h1.3M3.4 3.4l.9.9M11.7 11.7l.9.9M3.4 12.6l.9-.9M11.7 4.3l.9-.9"/></svg>';
+const MOON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M13.5 9.6A5.6 5.6 0 0 1 6.4 2.5a5.6 5.6 0 1 0 7.1 7.1z"/></svg>';
+const themeBtn = $('#theme'), meta = document.querySelector('meta[name="theme-color"]');
+function syncTheme() {
+  const light = document.documentElement.dataset.theme === 'light';
+  themeBtn.innerHTML = light ? MOON : SUN; themeBtn.setAttribute('aria-label', light ? 'Switch to dark mode' : 'Switch to light mode');
+  readTheme(); meta.setAttribute('content', C.bg); launches();
+}
+themeBtn.addEventListener('click', () => {
+  const light = document.documentElement.dataset.theme !== 'light';
+  const apply = () => { if (light) document.documentElement.dataset.theme = 'light'; else delete document.documentElement.dataset.theme; syncTheme(); };
+  try { localStorage.setItem('ow-theme', light ? 'light' : 'dark'); } catch (e) {}
+  if (document.startViewTransition && !reduce) document.startViewTransition(apply); else apply();
+});
+syncTheme();
+})();
+</script>
+</body>
+</html>

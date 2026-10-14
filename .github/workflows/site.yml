@@ -1,0 +1,56 @@
+name: Site
+
+# Rebuilds https://smymuna.github.io/orbitwatch/ from the newest data release:
+# after every successful collection, and whenever the page or the export changes.
+on:
+  workflow_run:
+    workflows: [Collect]
+    types: [completed]
+  push:
+    branches: [main]
+    paths: ["site/**", "src/orbitwatch/export.py", ".github/workflows/site.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e .
+      - name: Download the newest warehouse
+        run: |
+          tag=$(gh release list --limit 20 --json tagName,createdAt \
+            --jq '[.[] | select(.tagName | startswith("data-"))] | sort_by(.createdAt) | last | .tagName')
+          echo "Using $tag"
+          gh release download "$tag" --pattern 'warehouse-*.duckdb' --dir /tmp/release
+      - name: Export the site data
+        run: orbitwatch-export --warehouse /tmp/release/warehouse-*.duckdb --out site/data
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

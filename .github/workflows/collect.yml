@@ -1,11 +1,13 @@
 name: Collect
 
 # CelesTrak only serves the current state of orbit, so history exists only if we keep it.
-# Once a day: restore earlier snapshots from GitHub Releases, take a new one, rebuild the
-# warehouse, and publish today's data as a release (the project's growing archive).
+# Every 6 hours: restore earlier snapshots from GitHub Releases, take a new one, rebuild the
+# warehouse, and publish the day's data as a release (the project's growing archive).
+# Same-day runs add their snapshots to that day's release. The Site workflow then rebuilds
+# the website from it.
 on:
   schedule:
-    - cron: "17 6 * * *" # 06:17 UTC daily, off the hour to spread load on CelesTrak
+    - cron: "17 */6 * * *" # every 6 hours at :17, off the hour to spread load on CelesTrak
   workflow_dispatch:
 
 permissions:
@@ -24,7 +26,7 @@ env:
 jobs:
   collect:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -40,8 +42,15 @@ jobs:
           done
           for f in /tmp/restore/*.tar.gz; do [ -e "$f" ] && tar -xzf "$f" -C data; done
           find data -name '*.parquet' | wc -l
-      - name: Run the pipeline
-        run: dagster job execute -m orbitwatch.definitions -j refresh
+      - name: Run the pipeline (retries if CelesTrak is unreachable)
+        run: |
+          for attempt in 1 2 3; do
+            dagster job execute -m orbitwatch.definitions -j refresh && exit 0
+            [ "$attempt" = 3 ] && break
+            echo "::warning::Attempt $attempt failed; trying again in 10 minutes"
+            sleep 600
+          done
+          exit 1
       - name: Publish today's snapshot
         run: |
           day=$(date -u +%F)

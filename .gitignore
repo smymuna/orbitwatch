@@ -7,7 +7,10 @@ __pycache__/
 .ruff_cache/
 .env
 .DS_Store
-data/
+/data/
+# generated from the warehouse by orbitwatch-export (the Site workflow builds them)
+site/data/orbits.json
+site/data/stats.json
 .dagster_home/
 dbt/target/
 dbt/logs/

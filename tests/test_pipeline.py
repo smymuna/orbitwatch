@@ -172,3 +172,52 @@ def test_warehouse_is_portable(warehouse: tuple[Path, int]) -> None:
     path, _ = warehouse
     leaky = _q(path, "select view_name from duckdb_views() where sql ilike '%read_parquet%'")
     assert leaky == []
+
+
+def test_published_warehouse_opens_under_another_name(
+    warehouse: tuple[Path, int], tmp_path: Path
+) -> None:
+    # Releases are named warehouse-YYYY-MM-DD.duckdb, so DuckDB gives the file another
+    # catalog name; every table and view must still answer (a view naming the original
+    # catalog broke this in the 2026-10-13 release).
+    path, _ = warehouse
+    copy = tmp_path / "warehouse-2026-10-13.duckdb"
+    copy.write_bytes(path.read_bytes())
+    with duckdb.connect(str(copy), read_only=True) as con:
+        names = con.sql(
+            "select schema_name, table_name from duckdb_tables() where not internal "
+            "union all select schema_name, view_name from duckdb_views() where not internal"
+        ).fetchall()
+        assert names
+        for schema, name in names:
+            con.sql(f'select count(*) from "{schema}"."{name}"').fetchall()
+
+
+def test_site_export(warehouse: tuple[Path, int], tmp_path: Path) -> None:
+    from orbitwatch.export import ORBIT_FIELDS, export_site
+
+    path, victim = warehouse
+    counts = export_site(path, tmp_path)
+    orbits = json.loads((tmp_path / "orbits.json").read_text())
+    stats = json.loads((tmp_path / "stats.json").read_text())
+
+    (n,) = _q(
+        path, "select count(distinct norad_cat_id) from stg_gp_elements where mean_motion > 0"
+    )[0]
+    assert counts["objects"] == len(orbits["objects"]) == n
+    assert all(len(o) == len(ORBIT_FIELDS) for o in orbits["objects"])
+    iss = next(o for o in orbits["objects"] if o[0] == 25544)
+    assert iss[1].startswith("ISS")
+    assert iss[ORBIT_FIELDS.index("type")] == 0  # payload
+    # the ISS row is its latest element set: the raised orbit from day 2
+    (mm,) = _q(path, "select mean_motion from stg_gp_elements where norad_cat_id = 25544 "
+                     "order by epoch desc limit 1")[0]  # fmt: skip
+    assert iss[3] == round(mm, 8)
+    misses = [c[2] for c in orbits["closest"]]
+    assert misses == sorted(misses)
+    assert orbits["pairs_5km"] == len(_q(path, "select 1 from mart_close_approaches"))
+    assert orbits["snapshot_at"].startswith(DAY2.date().isoformat())
+
+    assert victim in [r["norad"] for r in stats["reentries"]]
+    assert stats["orbit_changes"]["by_type"].get("raise") == 1
+    assert {"owner", "objects"} <= set(stats["owners"][0])
