@@ -1,0 +1,26 @@
+name: Keep alive
+
+# GitHub disables scheduled workflows in a public repository after 60 days without
+# activity. Re-enabling them through the API resets that timer, so the schedule keeps
+# running without empty commits (which would also trigger redeploys). This workflow
+# re-enables itself too.
+on:
+  schedule:
+    - cron: "41 7 1 * *" # 07:41 UTC on the 1st of each month
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Re-enable the scheduled workflows
+        run: |
+          for wf in collect.yml keepalive.yml; do
+            gh api -X PUT "repos/${{ github.repository }}/actions/workflows/$wf/enable"
+            echo "enabled $wf"
+          done

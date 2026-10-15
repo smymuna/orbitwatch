@@ -157,6 +157,8 @@ orbitwatch-export --out site/data && python -m http.server -d site 8000
   releases, runs the pipeline (retrying twice, 10 minutes apart, if CelesTrak is
   unreachable), and publishes the day's snapshots and warehouse.
 - **Site workflow:** rebuilds and deploys the website after every successful collection.
+- **Keep-alive workflow:** monthly, re-enables the scheduled workflows through the API so
+  GitHub's 60-day inactivity rule never stops the collection.
 
 ## Limitations
 
