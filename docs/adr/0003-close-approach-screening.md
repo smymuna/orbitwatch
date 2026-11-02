@@ -7,14 +7,16 @@
 
 Checking every pair of ~20,000 objects is 200 million pairs per time step, and a day has
 thousands of steps. Objects in low orbit move at ~7.5 km/s, so two of them can close
-distance at up to ~15.5 km/s.
+distance at up to ~15.5 km/s. An elliptical object near perigee is faster: TacSat-4 ×
+Starlink-4625 reached 16.19 km/s on 2 November 2026, above the original 16 km/s limit. The
+bound is now 22 km/s (two objects just below escape speed, head-on).
 
 ## Decision
 
 1. Propagate all objects with SGP4 (vectorised C implementation) on a 20-second grid,
    in chunks of time steps to bound memory.
 2. At each step, build a KD-tree over positions and query pairs within
-   `threshold + 16 km/s x step / 2`. Nothing outside that radius can come within the
+   `threshold + 22 km/s x step / 2`. Nothing outside that radius can come within the
    threshold during that half-step either side.
 3. For each candidate, assume straight-line relative motion within the step and solve
    for the closest approach analytically: `t* = -(dr . dv) / |dv|^2`, clamped to the step.

@@ -1,18 +1,23 @@
 from __future__ import annotations
 
+import json
 import math
+import re
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 import pytest
 from sgp4.api import jday
 
 from orbitwatch.orbits import (
+    MAX_RELATIVE_SPEED_KMS,
     perigee_apogee_km,
     satrec_from_record,
     screen_close_approaches,
     semi_major_axis_km,
 )
+from tests.conftest import FIXTURES
 
 T0 = datetime(2026, 10, 7, 2, 0, tzinfo=UTC)
 
@@ -99,3 +104,19 @@ def test_real_debris_cloud_finds_known_close_pairs(debris: list[dict[str, Any]])
     misses = [c.miss_km for c in res.approaches]
     assert misses == sorted(misses)
     assert all(0 <= m < 5 for m in misses)
+
+
+def test_elliptical_orbit_can_pass_faster_than_two_circular_ones() -> None:
+    # Real elements. This pair failed the 16 km/s range test and stopped collection for a day.
+    records = json.loads((FIXTURES / "gp_fast_pair.json").read_text())
+    start = datetime(2026, 11, 2, 20, 40, 49, tzinfo=UTC)
+    result = screen_close_approaches(records, start=start, hours=3)
+    assert [(c.norad_a, c.norad_b) for c in result.approaches] == [(37818, 53683)]
+    assert 16 < result.approaches[0].relative_speed_kms < MAX_RELATIVE_SPEED_KMS
+
+
+def test_speed_limit_matches_the_dbt_range_test() -> None:
+    marts = (Path(__file__).parents[1] / "dbt/models/marts/marts.yml").read_text()
+    limit = re.search(r"relative_speed_kms\s+data_tests:.*?max_value: (\d+)", marts, re.S)
+    assert limit is not None
+    assert float(limit[1]) == MAX_RELATIVE_SPEED_KMS

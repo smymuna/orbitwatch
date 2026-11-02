@@ -144,7 +144,7 @@ orbitwatch-export --out site/data && python -m http.server -d site 8000
 
 ## Engineering
 
-- **Tests:** 36 tests, 93% coverage. Parsers run on real captured CelesTrak payloads,
+- **Tests:** 38 tests, 93% coverage. Parsers run on real captured CelesTrak payloads,
   including its "not updated" and "invalid group" replies. Screening is checked against a
   brute-force propagation (agreement within 50 m) and real debris data. An **offline
   end-to-end test** runs Dagster + dbt + DuckDB over two simulated days and asserts that
@@ -155,7 +155,9 @@ orbitwatch-export --out site/data && python -m http.server -d site 8000
 - **CI:** lint, types, tests, Docker build with a UI smoke test.
 - **Collect workflow:** a GitHub Actions run every 6 hours restores 90 days of history from
   releases, runs the pipeline (retrying twice, 10 minutes apart, if CelesTrak is
-  unreachable), and publishes the day's snapshots and warehouse.
+  unreachable; a failed data test is not retried), and publishes the day's snapshots. A
+  failed run still saves its snapshots, because CelesTrak keeps no history; the warehouse is
+  added only when the whole pipeline passes.
 - **Site workflow:** rebuilds and deploys the website after every successful collection.
 - **Keep-alive workflow:** monthly, re-enables the scheduled workflows through the API so
   GitHub's 60-day inactivity rule never stops the collection.

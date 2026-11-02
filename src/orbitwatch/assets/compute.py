@@ -10,7 +10,7 @@ import dagster as dg
 import duckdb
 import pyarrow as pa
 
-from orbitwatch.orbits import screen_close_approaches
+from orbitwatch.orbits import MAX_RELATIVE_SPEED_KMS, screen_close_approaches
 from orbitwatch.resources import OrbitwatchConfig
 
 # Latest element set per object, recent enough to propagate, renamed to OMM field names.
@@ -86,6 +86,15 @@ def close_approaches(
         con.execute("create or replace table compute.close_approaches as select * from result")
 
     closest = result.approaches[0] if result.approaches else None
+    fastest = max(result.approaches, key=lambda c: c.relative_speed_kms, default=None)
+    if fastest:
+        # Named in the log because a failed dbt range test only reports a row count.
+        message = (
+            f"fastest approach: {fastest.norad_a} x {fastest.norad_b} at "
+            f"{fastest.relative_speed_kms:.2f} km/s, miss {fastest.miss_km:.3f} km"
+        )
+        too_fast = fastest.relative_speed_kms > MAX_RELATIVE_SPEED_KMS
+        (context.log.warning if too_fast else context.log.info)(message)
     return dg.MaterializeResult(
         metadata={
             "objects_screened": result.objects_screened,
@@ -93,5 +102,6 @@ def close_approaches(
             "co_moving_pairs_excluded": result.co_moving_pairs,
             "close_approaches": len(result.approaches),
             "closest_km": round(closest.miss_km, 3) if closest else None,
+            "fastest_kms": round(fastest.relative_speed_kms, 3) if fastest else None,
         }
     )

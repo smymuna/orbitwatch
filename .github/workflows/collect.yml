@@ -42,20 +42,43 @@ jobs:
           done
           for f in /tmp/restore/*.tar.gz; do [ -e "$f" ] && tar -xzf "$f" -C data; done
           find data -name '*.parquet' | wc -l
-      - name: Run the pipeline (retries if CelesTrak is unreachable)
+      - name: Run the pipeline (retries only if CelesTrak is unreachable)
+        id: pipeline
+        continue-on-error: true # snapshots are still published below; the last step fails the run
         run: |
+          set -o pipefail
           for attempt in 1 2 3; do
-            dagster job execute -m orbitwatch.definitions -j refresh && exit 0
+            if dagster job execute -m orbitwatch.definitions -j refresh 2>&1 | tee run.log; then
+              exit 0
+            fi
+            if ! grep -qE "CelesTrak unreachable|HTTP 5[0-9]{2}" run.log; then
+              echo "::error::Not a connection problem, so retrying would not help"
+              exit 1
+            fi
             [ "$attempt" = 3 ] && break
             echo "::warning::Attempt $attempt failed; trying again in 10 minutes"
             sleep 600
           done
           exit 1
+      # CelesTrak keeps no history, so a snapshot not saved now is lost for good. Publish it
+      # even when a later step failed; the warehouse only when the whole pipeline passed.
       - name: Publish today's snapshot
         run: |
           day=$(date -u +%F)
-          tar -czf "bronze-$day.tar.gz" -C data $(cd data && find bronze -path "*snapshot_date=$day*" -name '*.parquet')
-          cp data/warehouse.duckdb "warehouse-$day.duckdb"
-          gh release create "data-$day" "bronze-$day.tar.gz" "warehouse-$day.duckdb" \
-            --title "Data $day" --notes "Daily snapshot of CelesTrak GP groups and the satellite catalogue (bronze Parquet) plus the rebuilt DuckDB warehouse." \
-            --latest=false || gh release upload "data-$day" "bronze-$day.tar.gz" "warehouse-$day.duckdb" --clobber
+          files=$(cd data && find bronze -path "*snapshot_date=$day*" -name '*.parquet')
+          if [ -z "$files" ]; then
+            echo "No snapshot from today to publish"
+            exit 0
+          fi
+          tar -czf "bronze-$day.tar.gz" -C data $files
+          assets="bronze-$day.tar.gz"
+          if [ "${{ steps.pipeline.outcome }}" = success ]; then
+            cp data/warehouse.duckdb "warehouse-$day.duckdb"
+            assets="$assets warehouse-$day.duckdb"
+          fi
+          gh release create "data-$day" $assets \
+            --title "Data $day" --notes "Daily snapshot of CelesTrak GP groups and the satellite catalogue (bronze Parquet) plus the rebuilt DuckDB warehouse, added once a run passes." \
+            --latest=false || gh release upload "data-$day" $assets --clobber
+      - name: Fail the run if the pipeline failed
+        if: steps.pipeline.outcome != 'success'
+        run: exit 1

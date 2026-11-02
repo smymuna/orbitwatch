@@ -20,7 +20,10 @@ from sgp4.api import Satrec, SatrecArray, jday
 
 MU_KM3_S2 = 398_600.4418  # Earth's gravitational parameter
 EARTH_RADIUS_KM = 6_378.137
-MAX_RELATIVE_SPEED_KMS = 16.0  # head-on in low Earth orbit is about 15.5 km/s
+# Upper bound for two objects still in orbit at these heights: each is below escape speed
+# (about 11 km/s), head-on. Not 15.5 km/s, the figure for two circular low orbits: an
+# elliptical object near perigee is faster (TacSat-4 x Starlink-4625 at 16.19 km/s, 2 Nov 2026).
+MAX_RELATIVE_SPEED_KMS = 22.0
 
 
 def semi_major_axis_km(mean_motion_rev_per_day: float) -> float:

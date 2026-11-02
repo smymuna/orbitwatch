@@ -51,4 +51,4 @@ models:
       - name: relative_speed_kms
         data_tests:
           - between:
-              arguments: {min_value: 0, max_value: 16}
+              arguments: {min_value: 0, max_value: 22} # orbits.MAX_RELATIVE_SPEED_KMS

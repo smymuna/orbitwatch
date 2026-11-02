@@ -37,10 +37,17 @@ jobs:
         run: |
           # tags are data-YYYY-MM-DD, so the name sorts by date (createdAt is the tagged
           # commit's date, the same for every release)
-          tag=$(gh release list --limit 30 --json tagName \
-            --jq '[.[].tagName | select(startswith("data-"))] | sort | last')
-          echo "Using $tag"
-          gh release download "$tag" --pattern 'warehouse-*.duckdb' --dir /tmp/release
+          # A release has no warehouse if that day's runs only saved snapshots, so take the
+          # newest one that does.
+          for tag in $(gh release list --limit 30 --json tagName \
+            --jq '[.[].tagName | select(startswith("data-"))] | sort | reverse | .[]'); do
+            if gh release download "$tag" --pattern 'warehouse-*.duckdb' --dir /tmp/release; then
+              echo "Using $tag"
+              exit 0
+            fi
+          done
+          echo "::error::No release has a warehouse"
+          exit 1
       - name: Export the site data
         run: orbitwatch-export --warehouse /tmp/release/warehouse-*.duckdb --out site/data
       - uses: actions/upload-pages-artifact@v3
