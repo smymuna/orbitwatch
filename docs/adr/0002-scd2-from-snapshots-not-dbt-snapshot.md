@@ -25,6 +25,7 @@ snapshots using window functions ("gaps and islands"):
 - Fully reproducible: dropping the warehouse and rebuilding from bronze gives the same
   history, including after restoring archived snapshots.
 - A value that changes and changes back (A -> B -> A) correctly yields three versions.
-- Cost grows with the number of snapshots (about 70,000 rows a day). DuckDB handles years
-  of this; at much larger scale an incremental model would replace the full rebuild.
+- Cost grew with the number of snapshots (about 70,000 rows a day). Since ADR 0004 the
+  change detection runs incrementally, once per completed day, and only change rows are
+  stored; the meaning of the history is unchanged and still rebuildable from bronze.
 - Tests assert that versions are contiguous (no gaps or overlaps) and unique.

@@ -68,7 +68,12 @@ class LayerTranslator(DagsterDbtTranslator):
 )
 def orbitwatch_dbt(context: dg.AssetExecutionContext, dbt: DbtCliResource) -> Any:
     # `build` runs each model followed by its tests, which surface as Dagster asset checks.
-    yield from dbt.cli(["build"], context=context).stream()
+    # Incremental models only process new snapshots; ORBITWATCH_FULL_REFRESH=1 rebuilds
+    # everything from all bronze files (first run, or after a model change).
+    args = ["build"]
+    if os.environ.get("ORBITWATCH_FULL_REFRESH") == "1":
+        args.append("--full-refresh")
+    yield from dbt.cli(args, context=context).stream()
 
 
 refresh_job = dg.define_asset_job(

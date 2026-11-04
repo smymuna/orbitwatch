@@ -27,7 +27,7 @@ ORBIT_FIELDS = ["norad", "name", "epoch_ms", "mean_motion", "ecc", "incl", "raan
 _LATEST_ELEMENTS = """
 with latest as (
     select g.*, row_number() over (partition by g.norad_cat_id order by g.epoch desc) as rn
-    from stg_gp_elements g
+    from fct_element_sets g
 )
 select l.norad_cat_id, l.object_name, epoch_ms(l.epoch), l.mean_motion, l.eccentricity,
        l.inclination, l.ra_of_asc_node, l.arg_of_pericenter, l.mean_anomaly, l.bstar,
@@ -156,7 +156,7 @@ def export_site(warehouse: Path, out_dir: Path) -> dict[str, int]:
     out_dir.mkdir(parents=True, exist_ok=True)
     with duckdb.connect(str(warehouse), read_only=True) as con:
         con.execute("set timezone = 'UTC'")
-        (last_seen,) = con.sql("select max(last_seen_at) from stg_gp_elements").fetchone() or (
+        (last_seen,) = con.sql("select max(last_seen_at) from fct_element_sets").fetchone() or (
             None,
         )
         snapshot_at = (last_seen or datetime.now(UTC)).astimezone(UTC)

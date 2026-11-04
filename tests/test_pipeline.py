@@ -27,16 +27,23 @@ def _gp(*names: str) -> list[dict[str, Any]]:
     return out
 
 
-def _write_history(data_dir: Path) -> None:
+def _write_history(data_dir: Path, days: tuple[int, ...] = (1, 2)) -> None:
+    """Bronze snapshots for DAY1 and/or DAY2 (the same data whichever way it is split)."""
     bronze = data_dir / "bronze"
     day1 = _gp("stations", "cosmos-2251-debris")
-    write_bronze(
-        bronze,
-        "gp",
-        "all",
-        parse_gp(json.dumps(day1).encode(), group="all", snapshot_at=DAY1),
-        DAY1,
-    )
+    satcat = (FIXTURES / "satcat_sample.csv").read_bytes()
+    t1 = parse_satcat(satcat, snapshot_at=DAY1)
+    if 1 in days:
+        write_bronze(
+            bronze,
+            "gp",
+            "all",
+            parse_gp(json.dumps(day1).encode(), group="all", snapshot_at=DAY1),
+            DAY1,
+        )
+        write_bronze(bronze, "satcat", "satcat", t1, DAY1)
+    if 2 not in days:
+        return
 
     # Day 2: the ISS gets a new element set one day later with a 2 km higher orbit.
     # Mean motion n ~ a^-1.5, so a +2 km raise lowers n by 1.5 * 2 / a of itself.
@@ -49,13 +56,14 @@ def _write_history(data_dir: Path) -> None:
         bronze,
         "gp",
         "all",
-        parse_gp(json.dumps([iss2]).encode(), group="all", snapshot_at=DAY2),
+        # The debris element sets are downloaded again unchanged, as happens until an object
+        # is tracked again: they must keep their first_seen_at and move last_seen_at.
+        parse_gp(
+            json.dumps([iss2, *_gp("cosmos-2251-debris")]).encode(), group="all", snapshot_at=DAY2
+        ),
         DAY2,
     )
 
-    satcat = (FIXTURES / "satcat_sample.csv").read_bytes()
-    t1 = parse_satcat(satcat, snapshot_at=DAY1)
-    write_bronze(bronze, "satcat", "satcat", t1, DAY1)
     # Day 2: one Cosmos 2251 fragment re-enters (it gets a decay date).
     rows = t1.to_pylist()
     victim = next(r for r in rows if r["decay_date"] is None and r["object_type"] == "DEB")
@@ -66,10 +74,8 @@ def _write_history(data_dir: Path) -> None:
     (data_dir / "victim.txt").write_text(str(victim["norad_cat_id"]))
 
 
-@pytest.fixture(scope="module")
-def warehouse(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, int]:
-    data_dir = tmp_path_factory.mktemp("data")
-    _write_history(data_dir)
+def _build(data_dir: Path) -> None:
+    """Run the pipeline (minus downloads) over whatever bronze is in data_dir."""
     mp = pytest.MonkeyPatch()
     mp.setenv("ORBITWATCH_DATA_DIR", str(data_dir))  # read by the dbt profile
     try:
@@ -95,7 +101,43 @@ def warehouse(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, int]:
         assert not checks, [str(c.asset_check_key) for c in checks]
     finally:
         mp.undo()
+
+
+@pytest.fixture(scope="module")
+def warehouse(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, int]:
+    data_dir = tmp_path_factory.mktemp("data")
+    _write_history(data_dir)
+    _build(data_dir)
     return data_dir / "warehouse.duckdb", int((data_dir / "victim.txt").read_text())
+
+
+TABLES = [
+    "fct_element_sets", "stg_satcat_latest", "stg_satcat_changes", "dim_object_history",
+    "dim_object", "fct_orbit_changes", "fct_reentries", "mart_orbit_population",
+    "mart_close_approaches", "mart_owners_in_orbit", "mart_launches_by_year",
+]  # fmt: skip
+
+
+def _contents(path: Path) -> dict[str, list[tuple[Any, ...]]]:
+    with duckdb.connect(str(path), read_only=True) as con:
+        return {t: sorted(con.sql(f"select * from {t}").fetchall(), key=repr) for t in TABLES}
+
+
+def test_incremental_runs_equal_a_full_rebuild(warehouse: tuple[Path, int], tmp_path: Path) -> None:
+    # Day 1, then day 2 added to the same warehouse, then a run with nothing new: the
+    # result must match the warehouse built from both days at once.
+    _write_history(tmp_path, days=(1,))
+    _build(tmp_path)
+    _write_history(tmp_path, days=(2,))
+    _build(tmp_path)
+    once = _contents(tmp_path / "warehouse.duckdb")
+    _build(tmp_path)
+    assert _contents(tmp_path / "warehouse.duckdb") == once  # nothing new, nothing changed
+    assert once == _contents(warehouse[0])
+    seen = _q(tmp_path / "warehouse.duckdb",
+              "select min(first_seen_at), max(last_seen_at) from fct_element_sets "
+              "where source_group = 'all' and norad_cat_id <> 25544")  # fmt: skip
+    assert seen == [(DAY1, DAY2)]
 
 
 def _q(path: Path, sql: str) -> list[tuple[Any, ...]]:
@@ -106,7 +148,7 @@ def _q(path: Path, sql: str) -> list[tuple[Any, ...]]:
 def test_every_catalogued_object_has_one_current_row(warehouse: tuple[Path, int]) -> None:
     path, _ = warehouse
     (n_dim,) = _q(path, "select count(*) from dim_object")[0]
-    (n_src,) = _q(path, "select count(distinct norad_cat_id) from stg_satcat_daily")[0]
+    (n_src,) = _q(path, "select count(distinct norad_cat_id) from stg_satcat_latest")[0]
     assert n_dim == n_src > 0
 
 
@@ -202,7 +244,7 @@ def test_site_export(warehouse: tuple[Path, int], tmp_path: Path) -> None:
     stats = json.loads((tmp_path / "stats.json").read_text())
 
     (n,) = _q(
-        path, "select count(distinct norad_cat_id) from stg_gp_elements where mean_motion > 0"
+        path, "select count(distinct norad_cat_id) from fct_element_sets where mean_motion > 0"
     )[0]
     assert counts["objects"] == len(orbits["objects"]) == n
     assert all(len(o) == len(ORBIT_FIELDS) for o in orbits["objects"])
@@ -210,7 +252,7 @@ def test_site_export(warehouse: tuple[Path, int], tmp_path: Path) -> None:
     assert iss[1].startswith("ISS")
     assert iss[ORBIT_FIELDS.index("type")] == 0  # payload
     # the ISS row is its latest element set: the raised orbit from day 2
-    (mm,) = _q(path, "select mean_motion from stg_gp_elements where norad_cat_id = 25544 "
+    (mm,) = _q(path, "select mean_motion from fct_element_sets where norad_cat_id = 25544 "
                      "order by epoch desc limit 1")[0]  # fmt: skip
     assert iss[3] == round(mm, 8)
     misses = [c[2] for c in orbits["closest"]]
@@ -221,3 +263,16 @@ def test_site_export(warehouse: tuple[Path, int], tmp_path: Path) -> None:
     assert victim in [r["norad"] for r in stats["reentries"]]
     assert stats["orbit_changes"]["by_type"].get("raise") == 1
     assert {"owner", "objects"} <= set(stats["owners"][0])
+
+
+def test_compacted_copy_has_the_same_contents(
+    warehouse: tuple[Path, int], tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from orbitwatch.publish import main
+
+    path, _ = warehouse
+    copy = tmp_path / "warehouse-2026-10-07.duckdb"  # a release-style name
+    main([str(path), str(copy)])
+    assert capsys.readouterr().out.startswith("compacted ")
+    assert copy.stat().st_size <= path.stat().st_size
+    assert _contents(copy) == _contents(path)

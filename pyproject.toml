@@ -26,6 +26,7 @@ dependencies = [
 
 [project.scripts]
 orbitwatch-export = "orbitwatch.export:main"
+orbitwatch-compact = "orbitwatch.publish:main"
 
 [project.optional-dependencies]
 dev = [

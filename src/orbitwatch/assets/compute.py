@@ -33,14 +33,14 @@ select
     bstar             as "BSTAR",
     mean_motion_dot   as "MEAN_MOTION_DOT",
     mean_motion_ddot  as "MEAN_MOTION_DDOT"
-from main.stg_gp_elements
+from main.fct_element_sets
 qualify row_number() over (partition by norad_cat_id order by epoch desc) = 1
 """
 
 
 @dg.asset(
     key=dg.AssetKey(["compute", "close_approaches"]),
-    deps=[dg.AssetKey(["stg_gp_elements"])],
+    deps=[dg.AssetKey(["fct_element_sets"])],
     group_name="compute",
     description="Pairs of objects predicted to pass within 5 km in the next 24 hours "
     "(SGP4 propagation + KD-tree screening). Screening candidates, not collision probabilities.",

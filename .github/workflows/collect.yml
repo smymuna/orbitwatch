@@ -9,6 +9,11 @@ on:
   schedule:
     - cron: "17 */6 * * *" # every 6 hours at :17, off the hour to spread load on CelesTrak
   workflow_dispatch:
+    inputs:
+      full_refresh:
+        description: Rebuild the warehouse from every snapshot (after changing a model)
+        type: boolean
+        default: false
 
 permissions:
   contents: write # to publish data releases
@@ -21,7 +26,7 @@ env:
   ORBITWATCH_DATA_DIR: data
   DAGSTER_HOME: ${{ github.workspace }}/.dagster_home
   GH_TOKEN: ${{ github.token }}
-  KEEP_DAYS: 90 # days of history restored for each run
+  FULL_REFRESH_REQUESTED: ${{ inputs.full_refresh && '1' || '0' }}
 
 jobs:
   collect:
@@ -34,11 +39,39 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -e .
-      - name: Restore history (bronze snapshots from earlier data releases)
+      # Incremental (ADR 0004): continue from the newest published warehouse and restore only
+      # the snapshots from that day on. With no usable warehouse (first run, a model change,
+      # or full_refresh), rebuild from every snapshot ever published.
+      - name: Restore the warehouse and recent snapshots
         run: |
           mkdir -p data "$DAGSTER_HOME"
-          for tag in $(gh release list --limit "$KEEP_DAYS" --json tagName --jq '.[].tagName | select(startswith("data-"))'); do
-            gh release download "$tag" --pattern 'bronze-*.tar.gz' --dir /tmp/restore --clobber
+          tags=$(gh release list --limit 1000 --json tagName --jq '[.[].tagName | select(startswith("data-"))] | sort | .[]')
+          base=""
+          if [ "$FULL_REFRESH_REQUESTED" != 1 ]; then
+            for tag in $(echo "$tags" | sort -r); do
+              if gh release download "$tag" --pattern 'warehouse-*.duckdb' --dir /tmp/warehouse; then
+                mv /tmp/warehouse/warehouse-*.duckdb data/warehouse.duckdb
+                base=$tag
+                break
+              fi
+            done
+          fi
+          # A warehouse from before the incremental models can't be continued.
+          if [ -n "$base" ] && ! python -c "import duckdb, sys; c = duckdb.connect('data/warehouse.duckdb', read_only=True); sys.exit(0 if c.sql(\"select count(*) from duckdb_tables() where table_name = 'stg_satcat_changes'\").fetchone()[0] else 1)"; then
+            echo "The warehouse in $base predates the incremental models"
+            rm data/warehouse.duckdb
+            base=""
+          fi
+          if [ -n "$base" ]; then
+            echo "Continuing from the warehouse in $base"
+          else
+            echo "Rebuilding from every snapshot"
+            echo "ORBITWATCH_FULL_REFRESH=1" >> "$GITHUB_ENV"
+          fi
+          for tag in $tags; do
+            if [ -z "$base" ] || [[ ! "$tag" < "$base" ]]; then
+              gh release download "$tag" --pattern 'bronze-*.tar.gz' --dir /tmp/restore --clobber
+            fi
           done
           for f in /tmp/restore/*.tar.gz; do [ -e "$f" ] && tar -xzf "$f" -C data; done
           find data -name '*.parquet' | wc -l
@@ -73,7 +106,7 @@ jobs:
           tar -czf "bronze-$day.tar.gz" -C data $files
           assets="bronze-$day.tar.gz"
           if [ "${{ steps.pipeline.outcome }}" = success ]; then
-            cp data/warehouse.duckdb "warehouse-$day.duckdb"
+            orbitwatch-compact data/warehouse.duckdb "warehouse-$day.duckdb"
             assets="$assets warehouse-$day.duckdb"
           fi
           gh release create "data-$day" $assets \

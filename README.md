@@ -50,7 +50,7 @@ flowchart LR
     CT[(CelesTrak<br/>GP groups + SATCAT)] -->|every 6 h, polite| I[Ingest assets<br/>Python]
     I --> R[(raw/<br/>exact bytes, gzip)]
     I --> B[(bronze/<br/>typed Parquet,<br/>by snapshot date)]
-    B --> S[dbt staging<br/>dedupe element sets]
+    B --> S[dbt incremental models<br/>new snapshots only]
     S --> M[dbt marts<br/>SCD2 history, orbit changes,<br/>re-entries, population, launches]
     S --> C[Close-approach screening<br/>SGP4 + KD-tree, Python]
     C --> M2[mart_close_approaches]
@@ -68,7 +68,7 @@ Dagster runs dbt in two parts around it. dbt tests appear as Dagster asset check
 |---|---|
 | `raw/` | Every download exactly as received, gzipped. Replayable. |
 | `bronze/` | Typed Parquet per download, Hive-partitioned by `snapshot_date` |
-| `staging` | `stg_gp_elements` (one row per distinct element set, with orbit size), `stg_satcat_daily` |
+| `staging` | `stg_satcat_latest` (newest catalogue row per object), `stg_satcat_changes` (tracked attributes, only when they change) |
 | `marts` | `dim_object`, `dim_object_history` (SCD2), `fct_element_sets`, `fct_orbit_changes`, `fct_reentries`, `mart_reentry_watch`, `mart_orbit_population`, `mart_launches_by_year`, `mart_owners_in_orbit`, `mart_close_approaches` |
 
 ## Example questions
@@ -144,7 +144,7 @@ orbitwatch-export --out site/data && python -m http.server -d site 8000
 
 ## Engineering
 
-- **Tests:** 38 tests, 93% coverage. Parsers run on real captured CelesTrak payloads,
+- **Tests:** 40 tests, 93% coverage. Parsers run on real captured CelesTrak payloads,
   including its "not updated" and "invalid group" replies. Screening is checked against a
   brute-force propagation (agreement within 50 m) and real debris data. An **offline
   end-to-end test** runs Dagster + dbt + DuckDB over two simulated days and asserts that
@@ -153,11 +153,13 @@ orbitwatch-export --out site/data && python -m http.server -d site 8000
   prove every table and view still answers, and the website export is checked against it.
 - **Static checks:** `ruff`, `mypy --strict`, `dagster definitions validate`.
 - **CI:** lint, types, tests, Docker build with a UI smoke test.
-- **Collect workflow:** a GitHub Actions run every 6 hours restores 90 days of history from
-  releases, runs the pipeline (retrying twice, 10 minutes apart, if CelesTrak is
-  unreachable; a failed data test is not retried), and publishes the day's snapshots. A
-  failed run still saves its snapshots, because CelesTrak keeps no history; the warehouse is
-  added only when the whole pipeline passes.
+- **Collect workflow:** a GitHub Actions run every 6 hours continues from the last published
+  warehouse and adds only new snapshots (incremental dbt models, [ADR
+  0004](docs/adr/0004-incremental-warehouse.md)), so all history is kept and runs stay fast.
+  CelesTrak is retried twice, 10 minutes apart, if unreachable; a failed data test is not
+  retried. A failed run still saves its snapshots, because CelesTrak keeps no history; the
+  (compacted) warehouse is added only when the whole pipeline passes. Run it with
+  `full_refresh` to rebuild everything from the raw snapshots.
 - **Site workflow:** rebuilds and deploys the website after every successful collection.
 - **Keep-alive workflow:** monthly, re-enables the scheduled workflows through the API so
   GitHub's 60-day inactivity rule never stops the collection.
@@ -176,6 +178,9 @@ orbitwatch-export --out site/data && python -m http.server -d site 8000
   0.5 km between element sets is treated as a burn. Thresholds are dbt variables.
 - **Coverage:** active satellites plus four major debris clouds, not every tracked
   fragment (CelesTrak publishes the full catalogue's orbits in other groups).
+- **Day-level history:** catalogue changes and the daily population series are recorded
+  once a UTC day is complete, so today's changes appear tomorrow (the current catalogue and
+  re-entries are up to date within the day).
 - **Single-file warehouse:** DuckDB is ideal at this size (tens of millions of rows). A
   shared deployment would move bronze to object storage and the warehouse to a server.
 

@@ -19,11 +19,8 @@ models:
   orbitwatch:
     staging:
       # Tables, not views: a view would read bronze Parquet through an absolute file path,
-      # so a warehouse copied elsewhere (e.g. the published release) could not use it.
+      # and would name the warehouse's catalog, so a warehouse copied elsewhere (e.g. the
+      # published release) could not use it. The big models are incremental (see ADR 0004).
       +materialized: table
-    intermediate:
-      # Ephemeral (inlined into the models that use it): a view here would name the
-      # warehouse's catalog, so the published file failed when opened under another name.
-      +materialized: ephemeral
     marts:
       +materialized: table

@@ -26,12 +26,43 @@ models:
         data_tests: [not_null]
 
   - name: fct_element_sets
+    description: >
+      One row per distinct element set (object + epoch), with orbit size and regime.
+      Incremental: each run reads only new snapshots.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [norad_cat_id, epoch]
     columns:
+      - name: norad_cat_id
+        data_tests: [not_null]
+      - name: epoch
+        data_tests: [not_null]
+      - name: eccentricity
+        data_tests:
+          - between:
+              arguments: {min_value: 0, max_value: 0.9999}
+      - name: inclination
+        data_tests:
+          - between:
+              arguments: {min_value: 0, max_value: 180}
+      - name: mean_motion
+        description: Revolutions per day. Above ~17 the object would be inside the atmosphere.
+        data_tests:
+          - between:
+              arguments: {min_value: 0.05, max_value: 17.5}
       - name: perigee_km
         description: Can be slightly negative just before re-entry; anything far below is an error.
         data_tests:
           - between:
               arguments: {min_value: -200, max_value: 500000}
+
+  - name: mart_orbit_population
+    description: Objects in orbit per completed UTC day, by type and regime (incremental).
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [snapshot_date, object_type, orbit_regime]
 
   - name: fct_orbit_changes
     columns:

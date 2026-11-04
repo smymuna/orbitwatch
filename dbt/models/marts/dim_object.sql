@@ -1,8 +1,6 @@
 -- Current view of every object ever catalogued, with its latest orbit when we have one.
 with latest_catalogue as (
-    select *
-    from {{ ref('stg_satcat_daily') }}
-    qualify row_number() over (partition by norad_cat_id order by snapshot_date desc) = 1
+    select * from {{ ref('stg_satcat_latest') }}
 ),
 
 latest_elements as (

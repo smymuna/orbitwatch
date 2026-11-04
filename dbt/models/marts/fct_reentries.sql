@@ -1,4 +1,6 @@
 -- Objects that have come back down, with when our catalogue snapshots first reported it.
+-- History only covers completed days, so a re-entry reported today falls back to the
+-- current catalogue's date.
 with first_decay_version as (
     select norad_cat_id, min(valid_from) as reported_on
     from {{ ref('dim_object_history') }}
@@ -7,7 +9,7 @@ with first_decay_version as (
 ),
 
 tracking_start as (
-    select min(snapshot_date) as first_snapshot from {{ ref('stg_satcat_daily') }}
+    select min(valid_from) as first_snapshot from {{ ref('dim_object_history') }}
 )
 
 select
@@ -18,9 +20,10 @@ select
     o.launch_date,
     o.decay_date,
     o.decay_date - o.launch_date as days_in_orbit,
-    f.reported_on,
+    coalesce(f.reported_on, o.catalogue_as_of) as reported_on,
     -- Re-entries reported in our very first snapshot happened before tracking started.
-    f.reported_on = t.first_snapshot as known_before_tracking
+    coalesce(f.reported_on, o.catalogue_as_of) = t.first_snapshot as known_before_tracking
 from {{ ref('dim_object') }} as o
-join first_decay_version as f using (norad_cat_id)
+left join first_decay_version as f using (norad_cat_id)
 cross join tracking_start as t
+where o.decay_date is not null
